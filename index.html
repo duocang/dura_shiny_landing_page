@@ -5,9 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Human Dura Atlas</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="http://pmet.online" />
+    <link rel="dns-prefetch" href="http://pmet.online" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
   </head>
   <body>
+    <div class="background-animation">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
     <header>
       <div class="container">
         <div class="logo">
@@ -63,70 +73,83 @@
         <h2>Datasets</h2>
         <p class="section-desc">Interactive visualizations of the single nuclei sural nerve dataset and the spatial transcriptomics data.</p>
 
-        <div class="grid">
-          <!-- Dataset 1 -->
-          <div class="card">
+        <!-- Overview Dataset -->
+        <div class="dataset-group featured-group">
+          <div class="card featured-card">
             <div class="card-image">
               <img src="images/all%20cells%20snRNA-seq.jpg" alt="All cells snRNA-seq" />
             </div>
             <div class="card-content">
               <h3>All cells snRNA-seq</h3>
-              <a href="http://pmet.online/cell_all" target="_blank" class="btn-sm">Explore</a>
+              <p class="card-desc">Comprehensive atlas of all cell types identified in the dura.</p>
+              <a href="http://pmet.online/dura/?dataset=All_cells_snRNAseq" target="_blank" class="btn-sm">Explore Dataset</a>
             </div>
           </div>
+        </div>
 
-          <!-- Dataset 2 -->
-          <div class="card">
-            <div class="card-image">
-              <img src="images/Fibroblasts%20snRNA-seq.jpg" alt="Fibroblasts snRNA-seq" />
+        <!-- Cell Type Subsets -->
+        <div class="subsection">
+          <h3 class="subsection-title">Cell Type Specific Subsets</h3>
+          <div class="grid grid-3">
+            <!-- Dataset 2 -->
+            <div class="card">
+              <div class="card-image">
+                <img src="images/Fibroblasts%20snRNA-seq.jpg" alt="Fibroblasts snRNA-seq" />
+              </div>
+              <div class="card-content">
+                <h3>Fibroblasts snRNA-seq</h3>
+                <a href="http://pmet.online/dura/?dataset=Fibro_snRNAseq" target="_blank" class="btn-sm">Explore</a>
+              </div>
             </div>
-            <div class="card-content">
-              <h3>Fibroblasts snRNA-seq</h3>
-              <a href="http://pmet.online/cell_fibro" target="_blank" class="btn-sm">Explore</a>
+
+            <!-- Dataset 3 -->
+            <div class="card">
+              <div class="card-image">
+                <img src="images/B%20cells%20snRNA-seq.jpg" alt="B cells snRNA-seq" />
+              </div>
+              <div class="card-content">
+                <h3>B cells snRNA-seq</h3>
+                <a href="http://pmet.online/dura/?dataset=Bc_snRNAseq" target="_blank" class="btn-sm">Explore</a>
+              </div>
+            </div>
+
+            <!-- Dataset 4 -->
+            <div class="card">
+              <div class="card-image">
+                <img src="images/Myeloid%20cells%20snRNA-seq.jpg" alt="Myeloid cells snRNA-seq" />
+              </div>
+              <div class="card-content">
+                <h3>Myeloid cells snRNA-seq</h3>
+                <a href="http://pmet.online/dura/?dataset=Myeloid_snRNAseq" target="_blank" class="btn-sm">Explore</a>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Dataset 3 -->
-          <div class="card">
-            <div class="card-image">
-              <img src="images/B%20cells%20snRNA-seq.jpg" alt="B cells snRNA-seq" />
+        <!-- Spatial Transcriptomics -->
+        <div class="subsection">
+          <h3 class="subsection-title">Spatial Transcriptomics</h3>
+          <div class="grid grid-2">
+            <!-- Dataset 5 -->
+            <div class="card">
+              <div class="card-image">
+                <img src="images/MS%20Fibroblasts%20spatial-seq.jpg" alt="MS Fibroblasts spatial-seq" />
+              </div>
+              <div class="card-content">
+                <h3>MS Fibroblasts spatial-seq</h3>
+                <a href="http://pmet.online/dura/?dataset=MS-Fibro_spatialseq" target="_blank" class="btn-sm">Explore</a>
+              </div>
             </div>
-            <div class="card-content">
-              <h3>B cells snRNA-seq</h3>
-              <a href="http://pmet.online/cell_b" target="_blank" class="btn-sm">Explore</a>
-            </div>
-          </div>
 
-          <!-- Dataset 4 -->
-          <div class="card">
-            <div class="card-image">
-              <img src="images/Myeloid%20cells%20snRNA-seq.jpg" alt="Myeloid cells snRNA-seq" />
-            </div>
-            <div class="card-content">
-              <h3>Myeloid cells snRNA-seq</h3>
-              <a href="http://pmet.online/cell_myeloid" target="_blank" class="btn-sm">Explore</a>
-            </div>
-          </div>
-
-          <!-- Dataset 5 -->
-          <div class="card">
-            <div class="card-image">
-              <img src="images/MS%20Fibroblasts%20spatial-seq.jpg" alt="MS Fibroblasts spatial-seq" />
-            </div>
-            <div class="card-content">
-              <h3>MS Fibroblasts spatial-seq</h3>
-              <a href="http://pmet.online/cell_spatial_ms" target="_blank" class="btn-sm">Explore</a>
-            </div>
-          </div>
-
-          <!-- Dataset 6 -->
-          <div class="card">
-            <div class="card-image">
-              <img src="images/Ctrl%20Fibroblasts%20spatial-seq.jpg" alt="Ctrl Fibroblasts spatial-seq" />
-            </div>
-            <div class="card-content">
-              <h3>Ctrl Fibroblasts spatial-seq</h3>
-              <a href="http://pmet.online/cell_spatial_ctrl" target="_blank" class="btn-sm">Explore</a>
+            <!-- Dataset 6 -->
+            <div class="card">
+              <div class="card-image">
+                <img src="images/Ctrl%20Fibroblasts%20spatial-seq.jpg" alt="Ctrl Fibroblasts spatial-seq" />
+              </div>
+              <div class="card-content">
+                <h3>Ctrl Fibroblasts spatial-seq</h3>
+                <a href="http://pmet.online/dura/?dataset=Ctrl-Fibro_spatialseq" target="_blank" class="btn-sm">Explore</a>
+              </div>
             </div>
           </div>
         </div>
@@ -139,5 +162,41 @@
         <p class="copyright">&copy; 2026 Human Dura Atlas - Mzh Lab. All rights reserved.</p>
       </div>
     </footer>
+
+    <script>
+      // Prefetch optimization for pmet.online links
+      document.addEventListener('DOMContentLoaded', () => {
+        const links = document.querySelectorAll('a[href*="pmet.online"]');
+        const prefetchCache = new Set();
+
+        const prefetchLink = (url) => {
+          if (prefetchCache.has(url)) return;
+
+          const link = document.createElement('link');
+          link.rel = 'prefetch';
+          link.href = url;
+          document.head.appendChild(link);
+
+          prefetchCache.add(url);
+          console.log('Prefetching:', url);
+        };
+
+        links.forEach((link) => {
+          // Prefetch on hover (high intent)
+          link.addEventListener('mouseenter', () => {
+            prefetchLink(link.href);
+          });
+
+          // Prefetch on touch start (mobile)
+          link.addEventListener(
+            'touchstart',
+            () => {
+              prefetchLink(link.href);
+            },
+            { passive: true }
+          );
+        });
+      });
+    </script>
   </body>
 </html>

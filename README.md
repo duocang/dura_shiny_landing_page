@@ -18,3 +18,4 @@ This is the landing page for the Human PNS Atlas project.
 2.  Go to **Settings** > **Pages**.
 3.  Select the **main** branch as the source.
 4.  Your site will be live at `https://<your-username>.github.io/<repo-name>/`.
+# dura_landing_page_test
