@@ -1,21 +1,13 @@
-# Human PNS Atlas Landing Page
+# Human Dura Atlas
 
-This is the landing page for the Human PNS Atlas project.
+### Welcome to the Human Dura Atlas
 
-## Project Structure
+This is the corresponding website to the publication Colocalization of fibrosis and inflammation in the dura in progressive multiple sclerosis by Börsch & Schafflick et al.
 
-- `index.html`: The main landing page.
-- `style.css`: Stylesheet for the landing page.
+We present a large scale single cell transcriptional and spatial atlas of human dura in health and disease (multiple sclerosis). Interactive visualizations of the single-nuclei dataset and the spatial transcriptomics data (Xenium) can be found below.
 
-## How to Edit
+Visit our atlas: [Human Dura Atlas](http://meninges.mzhlab.com/)
 
-1.  **Datasets**: To update the dataset images and links, edit the `#datasets` section in `index.html`. Look for the comments `<!-- Dataset X -->`.
-2.  **Images**: Replace the placeholder text/divs with actual `<img>` tags pointing to your images.
+Please cite the publication if you use the article, data or visualizations.
 
-## Hosting on GitHub Pages
-
-1.  Push this repository to GitHub.
-2.  Go to **Settings** > **Pages**.
-3.  Select the **main** branch as the source.
-4.  Your site will be live at `https://<your-username>.github.io/<repo-name>/`.
-# dura_landing_page_test
+**Börsch, S., & Schafflick, M. (2024). Colocalization of fibrosis and inflammation in the dura in progressive multiple sclerosis**.
