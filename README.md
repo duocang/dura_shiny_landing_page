@@ -10,4 +10,4 @@ Visit our atlas: [Human Dura Atlas](http://meninges.mzhlab.com/)
 
 Please cite the publication if you use the article, data or visualizations.
 
-**Börsch, S., & Schafflick, M. (2024). Colocalization of fibrosis and inflammation in the dura in progressive multiple sclerosis**.
+**Börsch, AL, & Schafflick, D (2026). Colocalization of fibrosis and inflammation in the dura in progressive multiple sclerosis**.
