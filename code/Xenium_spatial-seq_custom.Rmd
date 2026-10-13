@@ -1,0 +1,5285 @@
+---
+title: 'Xenium Custom Spatial Analysis'
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: true
+    toc_depth: 2
+    code_folding: show
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, eval = FALSE)
+```
+
+<style>
+/* Match the reference document colors with static R syntax highlighting. */
+code span.co { color: #998; font-style: italic; }
+code span.kw, code span.cf { color: #900; font-weight: bold; }
+code span.st, code span.ch { color: #d14; }
+code span.dv, code span.fl, code span.bn { color: #099; }
+code span.ot, code span.cn { color: #008080; }
+code span.fu, code span.op, code span.va { color: inherit; }
+</style>
+
+# 1.0 Set Up
+
+Prepare the analysis environment, input objects, and sample identifiers before calculating quality-control metrics.
+
+## 1.1 Environment
+
+Load the shared analysis setup before working with the sample objects. The setup file supplies project-specific packages and helpers; it is an external dependency, not included in this document. Define the data and result directories for your local environment before running the workflow.
+
+```{r step-001, eval=FALSE}
+source(file.path(result_dir, "0_global.R"))
+```
+
+### 1.1.1 Plotting Colors
+
+Define the shared palettes and plotting options used in the later cell-type maps. This longer configuration block is collapsed by default.
+
+```{r step-002, eval=FALSE, class.source="fold-hide"}
+cal_pal50 = c("#Fa1a8e", "#009B7D", "#ff9933", "#7083a4", "#ffce45", "#015e05", 
+              "#fedf25", "#d2b48c", "#bb55e1", "#6ec5ab", "#5d57af", "#143341", 
+              "#761445", "#d65b5a", "#94043a", "#e7a6cd", "#204519", "#87afd1", 
+              "#9b9a9d", "#f95b70", "#83c874", "#808080", "#452b5b", "#ecb100", 
+              "#f46124", "#525252", "#4c84a3", "#00bfff", "#01b4c6", "#174d79", 
+              "#a6a0f2", "#76facc", "#8491be", "#a32a2f", "#1c8859", "#2cc012", 
+              "#35782b", "#9c6755", "#3b3960", "#eeb0a1", "#3e1e13", "#0064c3", 
+              "#d81e4a", "#74646c", "#f675da", "#ffce45", "#ec7014", "#e50000", 
+              "#000000", "#a4527c", "#041859")
+
+cluster_colors <- c(
+  "0"  = "#Fa1a8e",
+  "1"  = "#009B7D",
+  "2"  = "#ff9933",
+  "3"  = "#7083a4",
+  "4"  = "#ffce45",
+  "5"  = "#015e05",
+  "6"  = "#fedf25",
+  "7"  = "#d2b48c",
+  "8"  = "#bb55e1",
+  "9"  = "#6ec5ab",
+  "10" = "#5d57af",
+  "11" = "#143341",
+  "12" = "#761445",
+  "13" = "#d65b5a",
+  "14" = "#94043a",
+  "15" = "#e7a6cd",
+  "16" = "#204519",
+  "17" = "#87afd1",
+  "18" = "#9b9a9d",
+  "19" = "#f95b70",
+  "20" = "#83c874",
+  "21" = "#808080",
+  "22" = "#452b5b",
+  "23" = "#ecb100",
+  "24" = "#f46124",
+  "25" = "#525252",
+  "26" = "#4c84a3",
+  "27" = "#00bfff",
+  "28" = "#01b4c6"
+)
+
+cluster_colors_major_groups_mix <- c( "ABC" = "#9584bd",
+                                      "arach_bordFibro" = "#87be4d",
+                                      "duraFibro" = "#f2cf22", 
+                                      "vascStroma" = "#00b8df", 
+                                      "Endo" = "#27a9b5", 
+                                      "Myeloid" = "#e04c73",
+                                      "Bc" = "#bf72ad",
+                                      "Tc" = "#dd4e10", 
+                                      "mix" = "grey") ##d2d2d0 #unknown #6f6f78
+
+
+cluster_colors_snRNA <- c(
+  "ABC" = "#9584bd",
+  "arach_bordFibro" = "#87be4d",
+  "duraFibro1" = "#38b083",
+  "duraFibro2" = "#5c96d0",
+  "duraFibro3" = "#ee756e",
+  "duraFibro4" = "#d49005",
+  "duraFibro5" = "#828cc5",
+  "duraFibro6" = "#ec67a2",
+  "duraFibro7" = "#3bab4b",
+  "duraFibro8" = "#d88356",
+  "vascFibro" = "#9ea71e",
+  "mixVascStroma" = "#a27eb7",
+  "Peri" = "#06b8e0",
+  "vSMC1" = "#bb4d63",
+  "vSMC2" = "#8e7eb9",
+  "mixEndo" = "#b078b1",
+  "artEndo" = "#3caa34",
+  "capEndo" = "#29aab5",
+  "venEndo" = "#957e25",
+  "Mast" = "#e26aa5",
+  "inflamMono1" = "#36b39c",
+  "inflamMono2" = "#75ae2b",
+  "inflamMono3" = "#12b3e8",
+  "Granulo" = "#cf6ea8",
+  "mixMyeloid" = "#32b6b3",
+  "IFN-CAM" = "#ec67a2",
+  "CAM" = "#e38803",
+  "Bc" = "#bf72ad",
+  "Tc" = "#dd4e10",
+  "unknown" = "lightgrey")
+
+
+# Set default colours for ggplot2
+options(ggplot2.discrete.colour=cal_pal50)
+options(ggplot2.discrete.fill=cal_pal50)
+options(ggplot2.continuous.colour="viridis")
+options(ggplot2.continuous.fill="viridis")
+options(ggplot2.binned.colour="viridis")
+options(ggplot2.binned.fill="viridis")
+```
+
+## 1.2 Input Data
+
+The script assumes that the individual sample objects have already been loaded. Import the raw data first, then use the sample names in the next section to assemble the analysis input.
+
+Use `LoadXenium()` with the appropriate sample directory and field of view. The loading command in the source script is a commented example; the workflow below expects the sample objects to exist already.
+
+## 1.3 Sample Identifiers
+
+Keep the sample identifiers aligned with the input objects. This named list is used to process samples consistently and retain their identity after merging.
+
+```{r step-003, eval=FALSE}
+sample_name <- c("MS_2525_13", "Ctrl_2129_20", "MS_2022_085", "Ctrl_2022_143",  "Ctrl_2019_042", "Ctrl_2022_112", "Ctrl_2023_021", "MS_2022_082", "MS_4074", "MS_2019_047", "Ctrl_2019_061", "Ctrl_2023_085", "Ctrl_2023_015", "MS_2022_103", "MS_2022_110", "MS_3867")
+
+# Create a list of Seurat objects for each sample, with respective sample names
+sample_list <- list(MS_2525_13, Ctrl_2129_20, MS_2022_085, Ctrl_2022_143, Ctrl_2019_042, Ctrl_2022_112, Ctrl_2023_021, MS_2022_082, MS_4074, MS_2019_047, Ctrl_2019_061, Ctrl_2023_085, Ctrl_2023_015, MS_2022_103, MS_2022_110, MS_3867
+)|> setNames(sample_name)
+
+qsave(sample_list, file.path(result_dir, "1.3_sample_list.qs"))
+```
+
+## 1.4 Select Regions of Interest
+
+Import the cell selections exported from Xenium Explorer, match the selected cell IDs to their sample objects, and retain the chosen regions of interest (ROIs). ROI selection precedes quality control in this custom-panel workflow.
+
+```{r step-004, eval=FALSE}
+roi_files <- list.files(
+  roi_dir,
+  pattern = "_ROI[0-9]*_cells_stats\\.csv$",
+  full.names = TRUE
+)
+
+basename(roi_files)
+length(roi_files)
+
+#get sample id from roi to macth with sample_list
+get_sample_key_from_roi_file <- function(f) {
+  
+  file_base <- tools::file_path_sans_ext(basename(f))
+  
+  condition <- stringr::str_extract(file_base, "Ctrl|MS")
+  
+  sample_part <- file_base %>%
+    stringr::str_remove("^S[0-9]+_") %>%
+    stringr::str_remove("_Ctrl.*$") %>%
+    stringr::str_remove("_MS.*$") %>%
+    stringr::str_remove("^s")
+  
+  sample_part <- gsub("-", "_", sample_part)
+  
+  sample_key <- paste0(condition, "_", sample_part)
+  
+  return(sample_key)
+}
+
+# collect roi cells per sample
+roi_cells_by_sample <- list()
+
+for (f in roi_files) {
+  
+  sample_key <- get_sample_key_from_roi_file(f)
+  roi_name <- stringr::str_extract(
+    tools::file_path_sans_ext(basename(f)),
+    "ROI[0-9]*"
+  )
+  
+  if (!sample_key %in% names(sample_list)) {
+    message("Skipping ", basename(f), ": ", sample_key, " not in sample_list")
+    next
+  }
+  
+  roi_df <- read.csv2(f)
+  
+  if (!"Cell.ID" %in% colnames(roi_df)) {
+    roi_df <- read.csv(f)
+  }
+  
+  roi_cells_xenium <- as.character(roi_df$Cell.ID) %>%
+    trimws()
+  
+  sample_obj <- sample_list[[sample_key]]
+  
+  seurat_cells <- colnames(sample_obj)
+  xenium_cells <- sub("_[0-9]+$", "", seurat_cells)
+  
+  roi_cells_seurat <- seurat_cells[
+    xenium_cells %in% roi_cells_xenium
+  ]
+  
+  message(
+    basename(f),
+    " | ", sample_key,
+    " | ", roi_name,
+    ": ",
+    length(roi_cells_seurat),
+    " cells"
+  )
+  
+  if (length(roi_cells_seurat) == 0) next
+  
+  roi_cells_by_sample[[sample_key]] <- unique(c(
+    roi_cells_by_sample[[sample_key]],
+    roi_cells_seurat
+  ))
+}
+
+#create roi-only sample list
+sample_list_roi <- list()
+
+for (sample_key in names(roi_cells_by_sample)) {
+  
+  roi_cells <- unique(roi_cells_by_sample[[sample_key]])
+  
+  sample_list_roi[[sample_key]] <- subset(
+    sample_list[[sample_key]],
+    cells = roi_cells
+  )
+  
+  sample_list_roi[[sample_key]]$sample <- sample_key
+  sample_list_roi[[sample_key]]$ROI_status <- "ROI"
+  
+  message(
+    sample_key,
+    ": ",
+    length(roi_cells),
+    " ROI cells"
+  )
+}
+```
+
+# 2.0 Quality Control
+
+Inspect transcript counts and detected genes across samples and tissue locations. Flagging low-quality cells before filtering makes it possible to review the proposed thresholds and compare the retained and excluded populations.
+
+## 2.1 Flag Cells for Quality Control
+
+For each sample, label cells according to the transcript-count and detected-gene thresholds below, then merge the objects for comparative plots. These flags record filtering decisions; the cells are removed in the filtering section.
+
+```{r step-005, eval=FALSE}
+for(sample_name in names(sample_list_roi)) {
+  
+  message("Processing: ", sample_name)
+  
+  sc <- sample_list_roi[[sample_name]]
+  
+  # Store sample name
+  sc$sample <- sample_name
+  
+  # Count filtering
+  sc$filtered_by_counts <- ifelse(
+    sc$nCount_Xenium < 5 |  #needs to be adjusted for the sample type
+      sc$nCount_Xenium > 500, #needs to be adjusted for the sample type
+    "filtered-out",
+    "keep"
+  )
+  
+  # Gene filtering
+  sc$filtered_by_genes <- ifelse(
+    sc$nFeature_Xenium < 5 | #needs to be adjusted for the sample type
+      sc$nFeature_Xenium > 500, #needs to be adjusted for the sample type
+    "filtered-out",
+    "keep"
+  )
+  
+  sample_list_roi[[sample_name]] <- sc
+}
+
+# Merge objects for combined violin plots
+combined <- merge(
+  x = sample_list_roi[[1]],
+  y = sample_list_roi[-1]
+)
+```
+
+## 2.2 Transcript Counts per Cell
+
+Compare the distribution of total Xenium transcript counts across samples. The violin plot provides a sample-level view of the count thresholds used to flag cells.
+
+```{r step-006, eval=FALSE}
+p_counts <- VlnPlot(combined, features = "nCount_Xenium", group.by = "sample", pt.size = 0) + RotatedAxis()
+
+ggsave(file.path(result_dir, "2.2.0_QC_number_of_counts_per_cells.pdf"), p_counts, width = 12, height = 5)
+
+p_counts <- VlnPlot(combined,
+                    features = "nCount_Xenium",
+                    group.by = "sample",
+                    pt.size = 0.1
+) +
+  RotatedAxis()
+
+ggsave(file.path(result_dir, "2.2.0_QC_number_of_counts_per_cells_individualCells.pdf"), p_counts, width = 12, height = 5)
+```
+
+### 2.2.1 Spatial Distribution of QC Flags
+
+Plot the keep and filtered-out labels in tissue coordinates. This helps identify whether excluded cells are concentrated in particular regions rather than uniformly distributed across the sample.
+
+```{r step-007, eval=FALSE}
+count_maps <- lapply(names(sample_list_roi), function(sample_name){
+  
+  ImageDimPlot(
+    sample_list_roi[[sample_name]],
+    group.by = "filtered_by_counts",
+    cols = c(
+      "keep" = "red",
+      "filtered-out" = "grey"
+    ),
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+p_count_maps <- wrap_plots(count_maps, ncol = 3)
+
+ggsave(file.path(result_dir, "2.2.1_QC_filter_by_counts_spatial.pdf"), p_count_maps, width = 16, height = 12)
+```
+
+### 2.2.2 Compare Retained and Flagged Cells
+
+Display the QC distributions separately for retained and flagged cells. These plots show how the selected thresholds partition each sample.
+
+```{r step-008, eval=FALSE}
+filtered_cells <- subset(combined, subset = filtered_by_counts == "filtered-out")
+
+p_counts_filtered <- VlnPlot(filtered_cells,
+                             features = "nCount_Xenium",
+                             group.by = "sample",
+                             pt.size = 0
+) +
+  RotatedAxis() +
+  ggtitle("Filtered-out cells")
+
+kept_cells <- subset(combined,
+                     subset = filtered_by_counts == "keep")
+
+p_counts_keep <- VlnPlot(kept_cells,
+                         features = "nCount_Xenium",
+                         group.by = "sample",
+                         pt.size = 0
+) +
+  RotatedAxis() +
+  ggtitle("Kept cells")
+
+p_counts_summary <- p_counts_filtered / p_counts_keep
+
+ggsave(
+  file.path(result_dir, "2.2.2_QC_counts_filtering_summary.pdf"),
+  p_counts_summary,
+  width = 12,
+  height = 8
+)
+
+
+p_counts_filtered <- VlnPlot(filtered_cells,
+                             features = "nCount_Xenium",
+                             group.by = "sample",
+                             pt.size = 0.1
+) +
+  RotatedAxis() +
+  ggtitle("Filtered-out cells")
+
+p_counts_keep <- VlnPlot(kept_cells,
+                         features = "nCount_Xenium",
+                         group.by = "sample",
+                         pt.size = 0.1
+) +
+  RotatedAxis() +
+  ggtitle("Kept cells")
+
+p_counts_summary <- p_counts_filtered / p_counts_keep
+
+ggsave(file.path(result_dir, "2.2.2_QC_counts_filtering_summary_individualCells.pdf"), p_counts_summary, width = 12, height = 8)
+```
+
+## 2.3 Detected Genes per Cell
+
+Compare the number of detected Xenium genes across samples. Inspect these distributions together with transcript counts before applying the filters.
+
+```{r step-009, eval=FALSE}
+p_genes <- VlnPlot(combined,
+                   features = "nFeature_Xenium",
+                   group.by = "sample",
+                   pt.size = 0
+) +
+  RotatedAxis()
+
+ggsave(file.path(result_dir, "2.3.0_QC_number_of_genes_per_cells.pdf"), p_genes, width = 12, height = 5)
+
+p_genes <- VlnPlot(combined,
+                   features = "nFeature_Xenium",
+                   group.by = "sample",
+                   pt.size = 0.1
+) +
+  RotatedAxis()
+
+ggsave(file.path(result_dir, "2.3.0_QC_number_of_genes_per_cells_imdividualCells.pdf"), p_genes, width = 12, height = 5)
+```
+
+### 2.3.1 Spatial Distribution of QC Flags
+
+Plot the keep and filtered-out labels in tissue coordinates. This helps identify whether excluded cells are concentrated in particular regions rather than uniformly distributed across the sample.
+
+```{r step-010, eval=FALSE}
+gene_maps <- lapply(names(sample_list_roi), function(sample_name){
+  
+  ImageDimPlot(
+    sample_list_roi[[sample_name]],
+    group.by = "filtered_by_genes",
+    cols = c(
+      "keep" = "red",
+      "filtered-out" = "grey"
+    ),
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+p_gene_maps <- wrap_plots(gene_maps, ncol = 3)
+
+ggsave(file.path(result_dir, "2.3.1_QC_filter_by_genes_spatial.pdf"), p_gene_maps, width = 16, height = 12)
+```
+
+### 2.3.2 Compare Retained and Flagged Cells
+
+Display the QC distributions separately for retained and flagged cells. These plots show how the selected thresholds partition each sample.
+
+```{r step-011, eval=FALSE}
+filtered_genes <- subset(combined,
+                         subset = filtered_by_genes == "filtered-out")
+
+p_genes_filtered <- VlnPlot(filtered_genes,
+                            features = "nFeature_Xenium",
+                            group.by = "sample",
+                            pt.size = 0
+) +
+  RotatedAxis() +
+  ggtitle("Filtered-out cells")
+
+kept_genes <- subset(combined,
+                     subset = filtered_by_genes == "keep")
+
+p_genes_keep <- VlnPlot(kept_genes,
+                        features = "nFeature_Xenium",
+                        group.by = "sample",
+                        pt.size = 0
+) +
+  RotatedAxis() +
+  ggtitle("Kept cells")
+
+p_genes_summary <- p_genes_filtered / p_genes_keep
+
+ggsave(
+  file.path(result_dir, "2.3.2_QC_genes_filtering_summary.pdf"),
+  p_genes_summary,
+  width = 12,
+  height = 8
+)
+
+p_genes_filtered <- VlnPlot(filtered_genes,
+                            features = "nFeature_Xenium",
+                            group.by = "sample",
+                            pt.size = 0.1
+) +
+  RotatedAxis() +
+  ggtitle("Filtered-out cells")
+
+p_genes_keep <- VlnPlot(kept_genes,
+                        features = "nFeature_Xenium",
+                        group.by = "sample",
+                        pt.size = 0.1
+) +
+  RotatedAxis() +
+  ggtitle("Kept cells")
+
+p_genes_summary <- p_genes_filtered / p_genes_keep
+
+ggsave(file.path(result_dir, "2.3.2_QC_genes_filtering_summary_individualCells.pdf"), p_genes_summary, width = 12, height = 8)
+```
+
+# 3.0 Filter Low-quality Cells
+
+Save the pre-filtering objects, then apply the QC flags and review the retained cells. The per-sample summaries below record the impact on cell numbers and gene expression.
+
+```{r step-012, eval=FALSE}
+for(sample_name in names(sample_list_roi)) {
+  
+  sample_list_roi[[sample_name]]$sample <- sample_name
+  
+}
+
+sample_list_roi_before <- sample_list_roi
+
+#save sample_list_roi before filtering
+qsave(sample_list_roi_before, file.path(result_dir, "3.0_samples_list_before_filtering.qs"))
+
+#filtered by counts 
+#Look for bins with very few or very many counts. Bins with <30 counts or >2000 counts are suspicious and flagged for removal.
+gene_maps <- lapply(names(sample_list_roi_before), function(sample_name){
+  
+  ImageDimPlot(
+    sample_list_roi_before[[sample_name]],
+    group.by = "filtered_by_counts",
+    cols = c(
+      "keep" = "grey70",
+      "filtered-out" = "red"
+    ),
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+p_gene_maps <- wrap_plots(gene_maps, ncol = 3)
+
+ggsave(file.path(result_dir, "3.0_QC_filter_by_counts_all.pdf"), p_gene_maps, width = 10, heigh = 10)
+
+#visualize only Ctrl 2022-143
+sample_name <- "Ctrl_2022_143"
+sample_name <- "Ctrl_2023_015"
+sample_name <- "Ctrl_2129_20"
+sample_name <- "Ctrl_2023_021"
+
+p <- ImageDimPlot(
+  sample_list_roi_before[[sample_name]],
+  group.by = "filtered_by_counts",
+  cols = c(
+    "keep" = "grey70",
+    "filtered-out" = "red"
+  ),
+  border.size = NA,
+  dark.background = FALSE,
+  size = 0.5
+) +
+  ggtitle(sample_name)
+
+p
+
+ggsave(file.path(result_dir, "3.0_QC_filter_by_counts_Ctrl_2022-143.pdf"), p, width = 5, heigh = 5)
+
+#filtered by genes
+sample_name <- "Ctrl_2022_143"
+
+p <- ImageDimPlot(
+  sample_list_roi_before[[sample_name]],
+  group.by = "filtered_by_genes",
+  cols = c(
+    "keep" = "grey70",
+    "filtered-out" = "red"
+  ),
+  border.size = NA,
+  dark.background = FALSE,
+  size = 0.5
+) +
+  ggtitle(sample_name)
+
+p
+
+ggsave(file.path(result_dir, "3.0_QC_filter_by_genes_Ctrl_2022-143.pdf"), p, width = 5, heigh = 5)
+```
+
+## 3.1 Filter and Export Sample Summaries
+
+Filter each sample using the QC flags, save the filtered objects, and export gene-expression summaries and cell-retention statistics. These outputs provide a record of which cells and genes enter integration.
+
+```{r step-013, eval=FALSE}
+wb <- createWorkbook()
+filtered_list <- list()
+# Filter each sample
+for(sample_name in names(sample_list_roi_before)){
+  
+  message("Filtering: ", sample_name)
+  
+  sc <- sample_list_roi_before[[sample_name]]
+  sc_filtered <- subset(
+    sc,
+    subset =
+      nCount_Xenium >= 5 &
+      nCount_Xenium <= 500 &
+      nFeature_Xenium >= 5 &
+      nFeature_Xenium <= 500
+  ) %>%
+    suppressWarnings()
+  
+  sc_filtered$sample <- sample_name
+  
+  filtered_list[[sample_name]] <- sc_filtered
+  
+  # Gene expression summary
+  counts <- GetAssayData(
+    sc,
+    layer = "counts"
+  )
+  
+  genes_expressed <- rowSums(counts > 0)
+  
+  gene_df <- data.frame(
+    gene = names(genes_expressed),
+    n_bins = genes_expressed
+  )
+  
+  addWorksheet(
+    wb,
+    sheetName = substr(sample_name, 1, 31)
+  )
+  
+  writeData(
+    wb,
+    sheet = substr(sample_name, 1, 31),
+    x = gene_df
+  )
+  
+  message(
+    sample_name,
+    ": ",
+    length(genes_expressed[genes_expressed > 10]),
+    " genes expressed in >10 cells"
+  )
+  
+}
+
+# Save filtered objects
+sample_list_roi <- filtered_list
+
+qsave(sample_list_roi, file.path(result_dir, "3.1_samples_list_after_filtering.qs"))
+
+# Save gene expression workbook
+saveWorkbook(wb, file.path(result_dir, "3.1_gene_expression_summary.xlsx"), overwrite = TRUE)
+
+# Filtering summary
+filtering_summary <- data.frame(
+  sample = names(sample_list_roi_before),
+  cells_before = sapply(sample_list_roi_before, ncol),
+  cells_after = sapply(sample_list_roi, ncol)
+)
+
+filtering_summary$percent_kept <-
+  round(
+    100 *
+      filtering_summary$cells_after /
+      filtering_summary$cells_before,
+    1
+  )
+
+write.csv2(filtering_summary, file.path(result_dir, "3.1_filtering_summary.csv"), row.names = FALSE)
+```
+
+## 3.2 Review Data After Filtering
+
+Compare spatial cell distributions and count/gene violin plots before and after filtering. Check that the retained tissue regions and sample distributions are suitable for joint analysis.
+
+```{r step-014, eval=FALSE}
+filter_maps <- lapply(names(sample_list_roi_before), function(sample_name){
+  
+  sc_before <- sample_list_roi_before[[sample_name]]
+  sc_after  <- sample_list_roi[[sample_name]]
+  
+  p1 <- ImageDimPlot(sc_before, border.size = NA, dark.background = FALSE, size = 0.5) +
+    ggtitle(paste0(sample_name, "\nBefore (n=", ncol(sc_before),")"))
+  
+  p2 <- ImageDimPlot(sc_after, border.size = NA, dark.background = FALSE, size = 0.5) +
+    ggtitle(paste0(sample_name, "\nAfter (n=", ncol(sc_after),")"))
+  
+  p1 | p2
+  
+})
+
+p_filter_maps <- wrap_plots(filter_maps, ncol = 2)
+
+ggsave(file.path(result_dir, "3.2_ImageDimPlot_before_after_filtering.pdf"), p_filter_maps, width = 16, height = 24)
+
+# Combined filtered object
+combined_filtered <- merge(
+  x = sample_list_roi[[1]],
+  y = sample_list_roi[-1]
+)
+
+# Counts after filtering
+p_counts <- VlnPlot(combined_filtered, features = "nCount_Xenium", group.by = "sample", pt.size = 0.05) + RotatedAxis()
+
+ggsave(file.path(result_dir, "3.2_counts_after_filtering.pdf"), p_counts, width = 12, height = 5)
+
+# Features after filtering
+p_features <- VlnPlot(
+  combined_filtered,
+  features = "nFeature_Xenium",
+  group.by = "sample",
+  pt.size = 0.05
+) +
+  RotatedAxis()
+
+ggsave(file.path(result_dir, "3.3_features_after_filtering.pdf"), p_features, width = 12, height = 5)
+```
+
+# 4.0 Integrate Samples
+
+Normalize samples separately and identify shared features and integration anchors. The integrated representation is used for joint dimensionality reduction and clustering.
+
+## 4.1 Normalize with SCTransform
+
+Apply SCTransform to the filtered sample objects and save the normalized objects. This prepares the data for SCT-based integration.
+
+```{r step-015, eval=FALSE}
+for (sample_name in names(sample_list_roi)) {
+  
+  sample_list_roi[[sample_name]] <- SCTransform(
+    sample_list_roi[[sample_name]],
+    assay = "Xenium",
+    vst.flavor = "v2", 
+    verbose = T
+  )
+  
+}
+
+qsave(sample_list_roi, file.path(result_dir, "4.1_sample_list_roi_SCT.qs"))
+```
+
+## 4.2 Find Anchors and Integrate
+
+Select integration features, prepare the SCT objects, and identify anchors between samples. Integrate the objects and save the combined representation for clustering.
+
+```{r step-016, eval=FALSE}
+features <- SelectIntegrationFeatures(object.list = sample_list_roi, nfeatures = 3000)
+
+#problem not all 3000 features are present in all samples --> need to filter the common ones first
+#common features
+common_scale_features <- Reduce(intersect, lapply(sample_list_roi, function(x) {
+  rownames(GetAssayData(x, assay = "SCT", layer = "scale.data"))}))
+length(common_scale_features)
+
+#restrict integration features
+features <- intersect(features, common_scale_features)
+length(features)
+
+#PreSCt Integration 
+sample_list_roi <- PrepSCTIntegration(
+  object.list = sample_list_roi,
+  anchor.features = features
+)
+
+
+#Run PCA for each sample
+sample_list_roi <- lapply(sample_list_roi, function(x) {
+  x <- RunPCA(x, features = features)
+  return(x)
+})
+
+
+anchors <- FindIntegrationAnchors(
+  object.list = sample_list_roi,
+  normalization.method = "SCT",
+  anchor.features = features,
+  dims = 1:30
+)
+
+sc_combined <- IntegrateData(
+  anchorset = anchors,
+  normalization.method = "SCT"
+)
+
+qsave(sc_combined, file.path(result_dir, "4.2_samples_combined.qs"))
+```
+
+## 4.3 Cluster Cells
+
+Build the nearest-neighbor graph, examine clustering resolutions, and calculate a UMAP embedding. Use the cluster structure and marker expression together when interpreting cell populations.
+
+```{r step-017, eval=FALSE}
+DefaultAssay(sc_combined) <- "integrated"
+sc_combined <- RunPCA(sc_combined, npcs = 30)
+ElbowPlot(sc_combined, ndims = 50)
+sc_combined <- FindNeighbors(sc_combined, dims = 1:20) #change dims
+
+res_check <- FindClusters(sc_combined, resolution = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.2))
+tree <- clustree(res_check)
+ggsave(file.path(result_dir, "4.3_combined_seurat_clustering_res_tree.pdf"), tree , width = 8, heigh = 10)
+
+sc_combined <- FindClusters(sc_combined, resolution = 0.3)
+sc_combined <- RunUMAP(sc_combined, reduction="pca", reduction.name="umap", dims=1:30, return.model=TRUE)
+sc_combined$seurat_clusters_normal <- sc_combined$seurat_clusters
+qsave(sc_combined, file.path(result_dir, "4.3.1_combined_seurat_clustering_res0.3.qs"))
+
+Idents(sc_combined) <- "seurat_clusters_normal"
+p <- DimPlot(sc_combined)
+ggsave(file.path(result_dir, "4.3_DimPlot_seurat_cluster_res0.3.pdf"), p , width = 5, heigh = 5)
+
+p <- DimPlot(sc_combined, reduction="umap", split.by="sample")
+ggsave(file.path(result_dir, "4.3_DimPlot_seurat_cluster_splitby_sample_res0.3.pdf"), p , width = 20, heigh = 5)
+```
+
+# 5.0 Clustering and Marker Genes
+
+Characterize the cell clusters using differential marker expression and summary plots. Marker tables support the later annotation and reference-comparison steps.
+
+```{r step-018, eval=FALSE}
+sc_combined <- PrepSCTFindMarkers(sc_combined, assay = "SCT", verbose = TRUE)
+```
+
+## 5.1 Identify Cluster Markers
+
+Find genes enriched in each cluster, rank the results, and export the marker tables. Where shown below, prepare the SCT assay before comparing clusters.
+
+```{r step-019, eval=FALSE}
+Idents(sc_combined) <- "seurat_clusters_normal"
+markers_seurat <- FindAllMarkers(object=sc_combined,
+                                 test.use="wilcox",
+                                 layer="data",
+                                 only.pos=FALSE,
+                                 max.cells.per.ident=1000)
+
+markers_sorted <- markers_seurat %>%
+  arrange(cluster, p_val_adj, desc(avg_log2FC))
+marker_list <- split(markers_sorted, markers_sorted$cluster)
+write.xlsx(marker_list, file.path(result_dir, "5.1_Cluster_Markers_seurat_res0.3.xlsx"))
+```
+
+## 5.2 Visualize Marker Expression
+
+Plot selected marker genes across clusters to review their expression specificity. These plots complement the exported marker tables and support cell-type annotation.
+
+```{r step-020, eval=FALSE}
+markers_top = markers_seurat %>% 
+  dplyr::group_by(cluster) %>% 
+  dplyr::arrange(p_val_adj, avg_log2FC) %>% 
+  dplyr::slice_head(n=3) %>% 
+  dplyr::ungroup() %>% 
+  as.data.frame()
+
+Idents(sc_combined) <- "seurat_clusters"
+p <- DotPlot(sc_combined, features=markers_top$gene %>% unique()) +
+  viridis::scale_color_viridis() + 
+  ylab("Cluster") + xlab("") + 
+  guides(size=guide_legend(order=1, title="Percent expressed"), color=guide_colorbar(title="Scaled Expression")) + 
+  ggtitle("Top markers per cluster (expression scaled)") + RotatedAxis()
+ggsave(file.path(result_dir, "5.2_DP_top_marker_genes_seurat_res0.3.pdf"), p , width = 15, heigh = 7)
+```
+
+# 6.0 Map the snRNA-seq Reference
+
+Use the snRNA-seq object as a reference to transfer cell-type labels and map the Xenium cells into the reference embedding. Retain prediction scores and apply the confidence rule shown below when assigning labels.
+
+```{r step-021, eval=FALSE}
+DefaultAssay(sc_combined) <- "SCT"
+DefaultAssay(snRNA_obj) <- "SCT"
+anchors <- FindTransferAnchors(reference = snRNA_obj, query = sc_combined, dims = 1:30, reference.reduction = "pca",normalization.method = "SCT", reference.assay = "integrated")
+predictions <- TransferData(anchorset = anchors, refdata = snRNA_obj$annotated_manuscript,dims = 1:30)
+sc_combined_pred <- AddMetaData(sc_combined, metadata = predictions)
+#if UMAP emddings are not save, you need to reun it here RUNUMAP()
+sc_combined_pred <- MapQuery(anchorset = anchors, reference = snRNA_obj, query = sc_combined_pred,refdata = list(celltype = "annotated_manuscript"), reference.reduction = "pca", reduction.model = "umap")
+cluster <- as.character(unique(snRNA_obj@meta.data$annotated_manuscript))
+
+#colors snRNA-seq dataset
+cluster_colors <- c(
+  "ABC" = "#9584bd",
+  "arach_bordFibro" = "#87be4d",
+  "duraFibro1" = "#38b083",
+  "duraFibro2" = "#5c96d0",
+  "duraFibro3" = "#ee756e",
+  "duraFibro4" = "#d49005",
+  "duraFibro5" = "#828cc5",
+  "duraFibro6" = "#ec67a2",
+  "duraFibro7" = "#3bab4b",
+  "duraFibro8" = "#d88356",
+  "vascFibro" = "#9ea71e",
+  "mixVascStroma" = "#a27eb7",
+  "Peri" = "#06b8e0",
+  "vSMC1" = "#bb4d63",
+  "vSMC2" = "#8e7eb9",
+  "mixEndo" = "#b078b1",
+  "artEndo" = "#3caa34",
+  "capEndo" = "#29aab5",
+  "venEndo" = "#957e25",
+  "Mast" = "#e26aa5",
+  "inflamMono1" = "#36b39c",
+  "inflamMono2" = "#75ae2b",
+  "inflamMono3" = "#12b3e8",
+  "Granulo" = "#cf6ea8",
+  "mixMyeloid" = "#32b6b3",
+  "IFN-CAM" = "#ec67a2",
+  "CAM" = "#e38803",
+  "Bc" = "#bf72ad",
+  "Tc" = "#dd4e10",
+  "unknown" = "lightgrey")
+
+# transfer labels 
+#label low-confidence cells as "unknown" 
+sc_combined$snRNA_annotation <- ifelse(
+  sc_combined_pred$prediction.score.max < 0.3,
+  "unknown",
+  sc_combined_pred$predicted.id
+)
+
+#major groups
+cluster_to_group <- c(
+  "ABC" = "ABC",
+  "arach_bordFibro" = "arach_bordFibro",
+  "duraFibro1" = "duraFibro",
+  "duraFibro2" = "duraFibro",
+  "duraFibro3" = "duraFibro",
+  "duraFibro4" = "duraFibro",
+  "duraFibro5" = "duraFibro",
+  "duraFibro6" = "duraFibro",
+  "duraFibro7" = "duraFibro",
+  "duraFibro8" = "duraFibro",
+  "vascFibro" = "vascStroma",
+  "mixVascStroma" = "vascStroma",
+  "Peri" = "vascStroma",
+  "vSMC1" = "vascStroma",
+  "vSMC2" = "vascStroma",
+  "mixEndo" = "Endo",
+  "artEndo" = "Endo",
+  "capEndo" = "Endo",
+  "venEndo" = "Endo",
+  "Mast" = "Myeloid",
+  "inflamMono1" = "Myeloid",
+  "inflamMono2" = "Myeloid",
+  "inflamMono3" = "Myeloid",
+  "Granulo" = "Myeloid",
+  "mixMyeloid" = "Myeloid",
+  "IFN-CAM" = "Myeloid",
+  "CAM" = "Myeloid",
+  "Bc" = "Bc",
+  "Tc" = "Tc",
+  "unknown" = "unknown")
+
+cluster_colors_major_groups <- c( "ABC" = "#9584bd",
+                                  "arach_bordFibro" = "#87be4d",
+                                  "duraFibro" = "#f2cf22", 
+                                  "vascStroma" = "#00b8df", 
+                                  "Endo" = "#27a9b5", 
+                                  "Myeloid" = "#e04c73",
+                                  "Bc" = "#bf72ad",
+                                  "Tc" = "#dd4e10")
+
+
+major_group_vector <- cluster_to_group[sc_combined$snRNA_annotation]
+names(major_group_vector) <- colnames(sc_combined)
+sc_combined <- AddMetaData(sc_combined, metadata = major_group_vector, col.name = "snRNA_major_group")
+
+
+cluster_to_group_mix <- c(
+  "ABC" = "ABC",
+  "arach_bordFibro" = "arach_bordFibro",
+  "duraFibro1" = "duraFibro",
+  "duraFibro2" = "duraFibro",
+  "duraFibro3" = "duraFibro",
+  "duraFibro4" = "duraFibro",
+  "duraFibro5" = "duraFibro",
+  "duraFibro6" = "duraFibro",
+  "duraFibro7" = "duraFibro",
+  "duraFibro8" = "duraFibro",
+  "vascFibro" = "vascStroma",
+  "mixVascStroma" = "mix",
+  "Peri" = "vascStroma",
+  "vSMC1" = "vascStroma",
+  "vSMC2" = "vascStroma",
+  "mixEndo" = "mix",
+  "artEndo" = "Endo",
+  "capEndo" = "Endo",
+  "venEndo" = "Endo",
+  "Mast" = "Myeloid",
+  "inflamMono1" = "Myeloid",
+  "inflamMono2" = "Myeloid",
+  "inflamMono3" = "Myeloid",
+  "Granulo" = "Myeloid",
+  "mixMyeloid" = "mix",
+  "IFN-CAM" = "Myeloid",
+  "CAM" = "Myeloid",
+  "Bc" = "Bc",
+  "Tc" = "Tc",
+  "unknown" = "unknown")
+
+cluster_colors_major_groups_mix <- c( "ABC" = "#9584bd",
+                                      "arach_bordFibro" = "#87be4d",
+                                      "duraFibro" = "#f2cf22", 
+                                      "vascStroma" = "#00b8df", 
+                                      "Endo" = "#27a9b5", 
+                                      "Myeloid" = "#e04c73",
+                                      "Bc" = "#bf72ad",
+                                      "Tc" = "#dd4e10", 
+                                      "mix" = "grey")
+
+major_group_vector <- cluster_to_group_mix[sc_combined$snRNA_annotation]
+names(major_group_vector) <- colnames(sc_combined)
+sc_combined <- AddMetaData(sc_combined, metadata = major_group_vector, col.name = "snRNA_major_group_mix")
+
+qsave(sc_combined_pred, file.path(result_dir, "6.0_snRNA_reference_prediction.qs"))
+```
+
+## 6.1 Compare Reference and Spatial Clusters
+
+Compare transferred cell-type assignments with the spatial Seurat clusters in the mapped embedding. Review prediction scores alongside the labels rather than treating every transferred annotation as equally certain.
+
+```{r step-022, eval=FALSE}
+DefaultAssay(sc_combined_pred) <- "SCT"
+Idents(sc_combined_pred) <- "seurat_clusters_normal"
+DefaultAssay(sc_combined) <- "SCT"
+Idents(sc_combined) <- "seurat_clusters_normal"
+
+p1 <- DimPlot(snRNA_obj, reduction = "umap", group.by = "annotated_manuscript", label = TRUE, label.size = 3,
+              repel = TRUE, cols = cluster_colors) + NoLegend() + ggtitle("snRNA-seq") + ylim(-19,19)
+p2 <- DimPlot(sc_combined_pred, reduction = "ref.umap", group.by = "seurat_clusters_normal", label = TRUE,
+              label.size = 3, repel = TRUE) + NoLegend() + ggtitle("Xenium") +ylim(-19,19)
+p <- p1 + p2
+ggsave(file.path(result_dir, "6.1_DimPlot_ref_Plot_seurat.pdf"), p , width = 7, heigh = 5)
+
+p2 <- FeaturePlot(sc_combined_pred, features = "predicted.celltype.score", reduction = "ref.umap", label = T, repel = T, pt.size = 0.8) +
+  ylim(-19,19) + ggtitle("Xenium")
+p <- p1 + p2
+ggsave(file.path(result_dir, "6.1_DimPlot_ref_Plot_pred_seurat.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(sc_combined_pred, group.by = "predicted.celltype", label = T, cols = cluster_colors)
+ggsave(file.path(result_dir, "6.1_DimPlot_snRNAseq_predicted.celltypes_seurat.pdf"), p , width = 10, heigh = 8)
+
+p <- FeaturePlot(sc_combined_pred, features = cluster,  reduction = "umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+ggsave(file.path(result_dir, "6.1_FeaturePlot_cohort1_predicted.celltypes_seurat.pdf"), p , width = 50, heigh = 100, limitsize = F)
+
+p <- DimPlot(sc_combined, group.by = "snRNA_annotation", cols = cluster_colors)
+ggsave(file.path(result_dir, "6.1_DimPlot_seurat_transferred_labels_snRNA.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(sc_combined, split.by = "snRNA_annotation", cols = cluster_colors)
+ggsave(file.path(result_dir, "6.1_DimPlot_seurat_splitby_transferred_labels_snRNA.pdf"), p , width = 30, heigh = 5)
+
+p <- DimPlot(sc_combined, group.by = "snRNA_major_group_mix", cols = cluster_colors_major_groups_mix)
+ggsave(file.path(result_dir, "6.1_DimPlot_seurat_transferred_labels_snRNA_major_groups_mix.pdf"), p , width = 5, heigh = 5)
+```
+
+# 7.0 Spatial Cell-type Maps
+
+Plot Seurat clusters and transferred cell-type labels in the tissue coordinates of each sample. Use consistent colors to compare the spatial distribution of populations across samples.
+
+```{r step-023, eval=FALSE}
+split_objects <- SplitObject(sc_combined, split.by = "sample")
+qsave(split_objects, file.path(result_dir, "7.0_split_objects_sc_combined_samples.qs"))
+
+
+#seurat clusters
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    group.by = "seurat_clusters_normal",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "7.0_ImageDimPlot_all_sc_combined_clusters_res0.3.pdf"),
+  combined_plot,
+  width = 12,
+  height = 8
+)
+
+
+#snRNA-seq clustering all
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    group.by = "snRNA_annotation",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5, 
+    cols = cluster_colors
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "8.0_ImageDimPlot_all_samples_snRNA_annotation.pdf"),
+  combined_plot,
+  width = 12,
+  height = 8
+)
+
+#snRNA-seq clustering major group mix
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    group.by = "snRNA_major_group_mix",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5, 
+    cols = cluster_colors_major_groups_mix
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "8.0_ImageDimPlot_all_samples_snRNA_major_group_mix.pdf"),
+  combined_plot,
+  width = 12,
+  height = 8
+)
+```
+
+# 8.0 Sample Metadata and Annotation
+
+Attach sample and patient information to the cell metadata, preserving cell identifiers during the join. These annotations connect the molecular measurements to the downstream condition comparisons.
+
+```{r step-024, eval=FALSE}
+patient_info <- openxlsx::read.xlsx(file.path(patient_dir, "xy.xlsx")) #use Supplement table
+#add meta.data
+meta <- sc_combined@meta.data
+# Add cell name as a new column for subsequent reassignment
+meta$cell_id <- rownames(meta)
+# Merge `information from `meta` and `patient_info`
+meta_new <- left_join(meta, patient_info[, c("sample_id_5k", "sample_id_custom", "patient_id", "sample", "dura_region", "condition", "MS.form", "FFPE", "Xenium_run", "in.snRNAseq.cohort", "sex", "age", "pmd_h", "years.after.diagnosis", "EDSS", "modified.rankin.scale")], by = c("sample" = "sample"))
+rownames(meta_new) <- meta$cell_id
+#add to seurat_object
+sc_combined@meta.data <- meta_new
+sc_combined@meta.data$sample_id <- as.factor(sc_combined@meta.data$sample_id_custom)
+sc_combined@meta.data$patient_id <- as.factor(sc_combined@meta.data$patient_id)
+sc_combined@meta.data$sample <- as.factor(sc_combined@meta.data$sample)
+sc_combined@meta.data$dura_region <- as.factor(sc_combined@meta.data$dura_region)
+sc_combined@meta.data$condition <- as.factor(sc_combined@meta.data$condition)
+sc_combined@meta.data$MS.form <- as.factor(sc_combined@meta.data$MS.form)
+sc_combined@meta.data$FFPE <- as.factor(sc_combined@meta.data$FFPE)
+sc_combined@meta.data$Xenium_run <- as.factor(sc_combined@meta.data$Xenium_run)
+sc_combined@meta.data$in.snRNAseq.cohort <- as.factor(sc_combined@meta.data$in.snRNAseq.cohort)
+sc_combined@meta.data$sex <- as.factor(sc_combined@meta.data$sex)
+sc_combined@meta.data$age <- as.factor(sc_combined@meta.data$age)
+sc_combined@meta.data$pmd_h <- as.factor(sc_combined@meta.data$pmd_h)
+sc_combined@meta.data$years.after.diagnosis <- as.factor(sc_combined@meta.data$years.after.diagnosis)
+sc_combined@meta.data$EDSS <- as.factor(sc_combined@meta.data$EDSS)
+sc_combined@meta.data$modified.rankin.scale <- as.factor(sc_combined@meta.data$modified.rankin.scale)
+
+rm(meta, meta_new, patient_info)
+
+qsave(sc_combined, file.path(result_dir, "8.0_sc_combined_meta_data_downstream.qs"))
+```
+
+# 9.0 Fibroblast Subclustering
+
+Select the fibroblasts identified by the transferred major-group annotation and repeat normalization, integration, and clustering within this subset. Inspect both the embedding and tissue maps before interpreting the refined populations.
+
+```{r step-025, eval=FALSE}
+DefaultAssay(sc_combined) <- "SCT"
+Idents(sc_combined) <- "snRNA_major_group_mix"
+Fibro_subset <- subset(sc_combined, idents = c("duraFibro", "ABC", "arach_bordFibro"))
+DimPlot(Fibro_subset)
+
+#reclustering
+Fibro_subset@assays$integrated <- NULL
+Fibro_subset@assays$SCT <- NULL
+
+# split by sample
+DefaultAssay(Fibro_subset) <- "Xenium"
+Fibro_list <- SplitObject(Fibro_subset, split.by = "sample")
+
+# SCTransform per sample
+Fibro_list <- lapply(Fibro_list, function(x) {
+  SCTransform(x, vst.flavor = "v2", assay = "Xenium", verbose = TRUE)
+})
+
+# re-integration and re-clustering 
+features <- SelectIntegrationFeatures(object.list = Fibro_list, nfeatures = 3000)
+
+common_scale_features <- Reduce(intersect, lapply(Fibro_list, function(x) {
+  rownames(GetAssayData(x, assay = "SCT", layer = "scale.data"))}))
+length(common_scale_features)
+features <- intersect(features, common_scale_features)
+length(features)
+
+Fibro_list <- PrepSCTIntegration(Fibro_list, anchor.features = features) 
+
+anchors <- FindIntegrationAnchors(Fibro_list, normalization.method = "SCT",anchor.features = features)
+
+qsave(anchors, file.path(result_dir, "9.0_integration_anchors_Fibros.qs"))
+#I ran it on the cluster
+Fibro_combined <- IntegrateData(anchors, normalization.method = "SCT") |>
+  RunPCA(verbose = T)
+Fibro_combined <- RunPCA(Fibro_combined, verbose = TRUE)
+ElbowPlot(Fibro_combined, ndims = 50)
+Fibro_combined <- RunUMAP(Fibro_combined, dims = 1:30) #change dims
+Fibro_combined <- FindNeighbors(Fibro_combined, dims = 1:30) #change dims
+qsave(Fibro_combined, file.path(result_dir, "9.0_Fibro_subset_integrated_before_clustering.qs"))
+
+Fibro_combined$integrated_snn_res.0.3 <- NULL
+res_check <- FindClusters(Fibro_combined, resolution = c(0.05,  0.1, 0.2, 0.3))
+tree <- clustree(res_check)
+ggsave(file.path(result_dir, "9.0_Fibro_subset_reclustering_restree.pdf"), tree, width = 10, height = 5)
+
+Fibro_seurat <- FindClusters(Fibro_combined, resolution = 0.1)
+Fibro_seurat <- RunUMAP(Fibro_seurat, dims = 1:30, return.model = T) #mreturnmodle true to save umap projection
+p <- DimPlot(Fibro_seurat, label = T) 
+ggsave(file.path(result_dir, "9.0_Fibro_DimPlot_res0.1.pdf"), p, width = 6, height = 6)
+
+p <- DimPlot(Fibro_seurat, split.by = "seurat_clusters")
+ggsave(file.path(result_dir, "9.0_Fibro_DimPlot_cluster_res0.1.pdf"), p, width =15, height = 6)
+
+qsave(Fibro_seurat, file.path(result_dir, "9.0_Fibro_subset_integrated_clustering_res0.1.qs"))
+
+
+split_objects <- SplitObject(Fibro_seurat, split.by = "sample")
+qsave(split_objects, file.path(result_dir, "9.0_Fibro_seurat-duraFibro_wo_mix_split_objects_samples.qs"))
+
+
+#seurat clusters
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    group.by = "seurat_clusters",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "9.0_ImageDimPlot_duraFibro_wo_mix_seurat_clusters_0.1.pdf"),
+  combined_plot,
+  width = 12,
+  height = 8
+)
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    split.by = "seurat_clusters",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "9.0_ImageDimPlot_duraFibro_wo_mix_splitbyseurat_clusters_0.1.pdf"),
+  combined_plot,
+  width = 12,
+  height = 12
+)
+
+#split.by 
+DefaultAssay(Fibro_seurat) <- "SCT"
+Idents(Fibro_seurat) <- "seurat_clusters"
+cluster_levels <- levels(Idents(Fibro_seurat))
+cluster_colors_seurat <- Seurat:::DiscretePalette(length(cluster_levels))
+names(cluster_colors_seurat) <- cluster_levels
+
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  obj <- split_objects[[sample_name]]
+  
+  celltypes <- sort(unique(obj$seurat_clusters))
+  
+  plots <- lapply(celltypes, function(ct) {
+    
+    obj$highlight <- ifelse(
+      obj$seurat_clusters == ct,
+      as.character(ct),
+      "Other"
+    )
+    
+    ImageDimPlot(
+      obj,
+      group.by = "highlight",
+      cols = c(
+        "Other" = "grey85",
+        cluster_colors_seurat[as.character(ct)]
+      ),
+      border.size = NA,
+      dark.background = FALSE,
+      size = 1
+    ) +
+      ggtitle(paste(sample_name, "-", ct))
+    
+  })
+  
+  wrap_plots(plots, ncol = 3)
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(
+    result_dir,
+    "9.0_ImageDimPlot_Fibro_cluster_highlighted_0.1.pdf"
+  ),
+  combined_plot,
+  width = 45,
+  height = 30, 
+  limitsize = F
+)
+```
+
+## 9.1 Identify Cluster Markers
+
+Find genes enriched in each cluster, rank the results, and export the marker tables. Where shown below, prepare the SCT assay before comparing clusters.
+
+```{r step-026, eval=FALSE}
+Fibro_seurat <- PrepSCTFindMarkers(Fibro_seurat)
+qsave(Fibro_seurat, file.path(result_dir, "9.1_Fibro_subset_integrated_clustering_res0.1_downstream_analysis.qs"))
+
+Idents(Fibro_seurat) <- "seurat_clusters"
+markers_seurat <- FindAllMarkers(object=Fibro_seurat,
+                                 test.use="wilcox",
+                                 layer="data",
+                                 only.pos=FALSE,
+                                 max.cells.per.ident=1000)
+
+markers_sorted <- markers_seurat %>%
+  arrange(cluster, p_val_adj, desc(avg_log2FC))
+marker_list <- split(markers_sorted, markers_sorted$cluster)
+write.xlsx(marker_list, file.path(result_dir, "9.1_Fibro_subset_Cluster_Markers_seurat_res0.1.xlsx"))
+
+markers_top = markers_seurat %>% 
+  dplyr::group_by(cluster) %>% 
+  dplyr::arrange(p_val_adj, avg_log2FC) %>% 
+  dplyr::slice_head(n=3) %>% 
+  dplyr::ungroup() %>% 
+  as.data.frame()
+
+DefaultAssay(Fibro_seurat) <- "SCT"
+p <- DotPlot(Fibro_seurat, features=markers_top$gene %>% unique()) +
+  viridis::scale_color_viridis() + 
+  ylab("Cluster") + xlab("") + 
+  guides(size=guide_legend(order=1, title="Percent expressed"), color=guide_colorbar(title="Scaled Expression")) + 
+  ggtitle("Top markers per cluster (expression scaled)") + RotatedAxis()
+ggsave(file.path(result_dir, "9.1_DP_top_marker_genes_Fibro_seurat_res0.1.pdf"), p , width = 15, heigh = 7)
+
+#genes of interest snRNA-seq 
+genes <- c("ANGPT1", "CFH", "FGF7", "SVEP1", "PI16", "SLC4A4", "KCNMA1")
+
+DefaultAssay(Fibro_seurat) <- "SCT"
+p <- FeaturePlot(Fibro_seurat, features = genes)
+ggsave(file.path(result_dir, "9.1_FP_Fibro_reclustered_genes_of_interest.pdf"), p, width = 10, height = 15)
+
+#ImageFeaturePlot
+pdf(
+  file.path(result_dir, "9.1_ImageFeaturePlot_Fibro_genes_of_interest.pdf"),
+  width = 14,
+  height = 12
+)
+
+for (gene in genes) {
+  
+  gene_maps <- lapply(names(split_objects), function(sample_name) {
+    
+    ImageFeaturePlot(
+      split_objects[[sample_name]],
+      features = gene,
+      border.size = NA,
+      dark.background = FALSE,
+      size = 1.5,
+      cols = c("grey95", "red")
+    ) +
+      ggtitle(sample_name) +
+      theme_void() +
+      theme(
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+        legend.position = "right",
+        plot.margin = margin(2, 2, 2, 2)
+      )
+  })
+  
+  gene_plot <- wrap_plots(gene_maps, ncol = 3) +
+    plot_annotation(
+      title = paste0("Fibroblast expression: ", gene),
+      theme = theme(
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+    )
+  
+  print(gene_plot)
+}
+
+dev.off()
+```
+
+## 9.2 Map to the Fibroblast Reference
+
+Use the snRNA-seq fibroblast reference to transfer more specific labels to the spatial subset. Compare the mapped embedding and prediction confidence with the de novo spatial clusters.
+
+```{r step-027, eval=FALSE}
+DefaultAssay(Fibro_seurat) <- "SCT"
+DefaultAssay(snRNA_Fibro) <- "SCT"
+snRNA_Fibro$annotated_manuscript <-  recode(snRNA_Fibro$seurat_clusters, "0" = "duraFibro1", "1" = "duraFibro3", "2" = "duraFibro4", "3" = "duraFibro2", "4" = "arach_bordFibro", "5" = "duraFibro7", "6" = "duraFibro5", "7" = "duraFibro8", "8" = "ABC", "9" = "duraFibro6")
+anchors <- FindTransferAnchors(reference = snRNA_Fibro, query = Fibro_seurat, dims = 1:30, reference.reduction = "pca",normalization.method = "SCT", reference.assay = "integrated")
+predictions <- TransferData(anchorset = anchors, refdata = snRNA_Fibro$annotated_manuscript,dims = 1:30)
+Fibro_seurat_pred <- AddMetaData(Fibro_seurat, metadata = predictions)
+#if UMAP emddings are not save, you need to reun it here RUNUMAP()
+Fibro_seurat_pred <- MapQuery(anchorset = anchors, reference = snRNA_Fibro, query = Fibro_seurat_pred,refdata = list(celltype = "annotated_manuscript"), reference.reduction = "pca", reduction.model = "umap")
+cluster <- as.character(unique(snRNA_Fibro@meta.data$annotated_manuscript))
+# transfer labels 
+#label low-confidence cells as "unknown" 
+Fibro_seurat$snRNA_annotation_Fibro <- ifelse(
+  Fibro_seurat_pred$prediction.score.max < 0.3,
+  "unknown",
+  Fibro_seurat_pred$predicted.id
+)
+
+
+cluster_colors = c("duraFibro1" = "#66c69b", 
+                   "duraFibro3" = "#ee756d", 
+                   "duraFibro4" = "#d49005", 
+                   "duraFibro2" = "#7caee5", 
+                   "arach_bordFibro" = "#87be4d", 
+                   "duraFibro7" = "#3cac57",
+                   "duraFibro5" = "#828dc6", 
+                   "duraFibro8" = "#ef7e48", 
+                   "ABC" = "#9584bd", 
+                   "duraFibro6" = "#ec67a2" 
+)
+
+#plotting
+DefaultAssay(Fibro_seurat_pred) <- "SCT"
+Idents(Fibro_seurat_pred) <- "seurat_clusters"
+DefaultAssay(Fibro_seurat) <- "SCT"
+Idents(Fibro_seurat) <- "seurat_clusters"
+
+p1 <- DimPlot(snRNA_Fibro, reduction = "umap", group.by = "annotated_manuscript", label = TRUE, label.size = 3,
+              repel = TRUE, cols = cluster_colors) + NoLegend() + ggtitle("snRNA-seq") + ylim(-19,19)
+p2 <- DimPlot(Fibro_seurat_pred, reduction = "ref.umap", group.by = "seurat_clusters_normal", label = TRUE,
+              label.size = 3, repel = TRUE) + NoLegend() + ggtitle("Xenium") +ylim(-19,19)
+p <- p1 + p2
+ggsave(file.path(result_dir, "9.2_DimPlot_ref_Plot_Fibro_seurat_snRNA_Fibro.pdf"), p , width = 7, heigh = 5)
+
+p2 <- FeaturePlot(Fibro_seurat_pred, features = "predicted.celltype.score", reduction = "ref.umap", label = T, repel = T, pt.size = 0.8) +
+  ylim(-19,19) + ggtitle("Xenium")
+p <- p1 + p2
+ggsave(file.path(result_dir, "9.2_DimPlot_ref_Plot_pred_Fibro_seurat_snRNA_Fibro.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(Fibro_seurat_pred, group.by = "predicted.celltype", label = T, cols = cluster_colors)
+ggsave(file.path(result_dir, "9.2_DimPlot_snRNAseq_predicted.celltypes_Fibro_seurat_snRNA_Fibro.pdf"), p , width = 10, heigh = 8)
+
+p <- FeaturePlot(Fibro_seurat_pred, features = cluster,  reduction = "umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+ggsave(file.path(result_dir, "9.2_FeaturePlot_cohort1_predicted.celltypes_Fibro_seurat_snRNA_Fibro.pdf"), p , width = 50, heigh = 30, limitsize = F)
+
+p <- DimPlot(Fibro_seurat, group.by = "snRNA_annotation_Fibro", cols = cluster_colors)
+ggsave(file.path(result_dir, "9.2_DimPlot_seurat_transferred_labels_Fibro_seurat_snRNA_Fibro.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(Fibro_seurat, split.by = "snRNA_annotation_Fibro", cols = cluster_colors)
+ggsave(file.path(result_dir, "9.2_DimPlot_Fibro_seurat_splitbytransferred_labels_snRNA_Fibro.pdf"), p , width = 30, heigh = 5)
+
+
+rm(Fibro_seurat_pred, predictions)
+```
+
+## 9.3 Map to the Full snRNA-seq Reference
+
+Map the spatial subset against the full snRNA-seq reference as a complementary annotation check. Inspect the transferred labels and confidence scores in relation to the subset-specific mapping.
+
+```{r step-028, eval=FALSE}
+DefaultAssay(Fibro_seurat) <- "SCT"
+DefaultAssay(snRNA_obj) <- "SCT"
+
+anchors <- FindTransferAnchors(reference = snRNA_obj, query = Fibro_seurat, dims = 1:30, reference.reduction = "pca",normalization.method = "SCT", reference.assay = "integrated")
+predictions <- TransferData(anchorset = anchors, refdata = snRNA_obj$annotated_manuscript,dims = 1:30)
+Fibro_seurat_pred <- AddMetaData(Fibro_seurat, metadata = predictions)
+#if UMAP emddings are not save, you need to reun it here RUNUMAP()
+Fibro_seurat_pred <- MapQuery(anchorset = anchors, reference = snRNA_obj, query = Fibro_seurat_pred,refdata = list(celltype = "annotated_manuscript"), reference.reduction = "pca", reduction.model = "umap")
+cluster <- as.character(unique(snRNA_obj@meta.data$annotated_manuscript))
+# transfer labels 
+#label low-confidence cells as "unknown" 
+Fibro_seurat$snRNA_annotation_all <- ifelse(
+  Fibro_seurat_pred$prediction.score.max < 0.3,
+  "unknown",
+  Fibro_seurat_pred$predicted.id
+)
+
+cluster_colors <- c(
+  "ABC" = "#9584bd",
+  "arach_bordFibro" = "#87be4d",
+  "duraFibro1" = "#38b083",
+  "duraFibro2" = "#5c96d0",
+  "duraFibro3" = "#ee756e",
+  "duraFibro4" = "#d49005",
+  "duraFibro5" = "#828cc5",
+  "duraFibro6" = "#ec67a2",
+  "duraFibro7" = "#3bab4b",
+  "duraFibro8" = "#d88356",
+  "vascFibro" = "#9ea71e",
+  "mixVascStroma" = "#a27eb7",
+  "Peri" = "#06b8e0",
+  "vSMC1" = "#bb4d63",
+  "vSMC2" = "#8e7eb9",
+  "mixEndo" = "#b078b1",
+  "artEndo" = "#3caa34",
+  "capEndo" = "#29aab5",
+  "venEndo" = "#957e25",
+  "Mast" = "#e26aa5",
+  "inflamMono1" = "#36b39c",
+  "inflamMono2" = "#75ae2b",
+  "inflamMono3" = "#12b3e8",
+  "Granulo" = "#cf6ea8",
+  "mixMyeloid" = "#32b6b3",
+  "IFN-CAM" = "#ec67a2",
+  "CAM" = "#e38803",
+  "Bc" = "#bf72ad",
+  "Tc" = "#dd4e10",
+  "unknown" = "lightgrey")
+
+#major groups
+cluster_to_group <- c(
+  "ABC" = "ABC",
+  "arach_bordFibro" = "arach_bordFibro",
+  "duraFibro1" = "duraFibro",
+  "duraFibro2" = "duraFibro",
+  "duraFibro3" = "duraFibro",
+  "duraFibro4" = "duraFibro",
+  "duraFibro5" = "duraFibro",
+  "duraFibro6" = "duraFibro",
+  "duraFibro7" = "duraFibro",
+  "duraFibro8" = "duraFibro",
+  "vascFibro" = "vascStroma",
+  "mixVascStroma" = "vascStroma",
+  "Peri" = "vascStroma",
+  "vSMC1" = "vascStroma",
+  "vSMC2" = "vascStroma",
+  "mixEndo" = "Endo",
+  "artEndo" = "Endo",
+  "capEndo" = "Endo",
+  "venEndo" = "Endo",
+  "Mast" = "Myeloid",
+  "inflamMono1" = "Myeloid",
+  "inflamMono2" = "Myeloid",
+  "inflamMono3" = "Myeloid",
+  "Granulo" = "Myeloid",
+  "mixMyeloid" = "Myeloid",
+  "IFN-CAM" = "Myeloid",
+  "CAM" = "Myeloid",
+  "Bc" = "Bc",
+  "Tc" = "Tc",
+  "unknown" = "unknown")
+
+cluster_colors_major_groups <- c( "ABC" = "#9584bd",
+                                  "arach_bordFibro" = "#87be4d",
+                                  "duraFibro" = "#f2cf22", 
+                                  "vascStroma" = "#00b8df", 
+                                  "Endo" = "#27a9b5", 
+                                  "Myeloid" = "#e04c73",
+                                  "Bc" = "#bf72ad",
+                                  "Tc" = "#dd4e10")
+
+
+major_group_vector <- cluster_to_group[Fibro_seurat$snRNA_annotation_all]
+names(major_group_vector) <- colnames(Fibro_seurat)
+Fibro_seurat <- AddMetaData(Fibro_seurat, metadata = major_group_vector, col.name = "snRNA_major_group")
+
+
+cluster_to_group_mix <- c(
+  "ABC" = "ABC",
+  "arach_bordFibro" = "arach_bordFibro",
+  "duraFibro1" = "duraFibro",
+  "duraFibro2" = "duraFibro",
+  "duraFibro3" = "duraFibro",
+  "duraFibro4" = "duraFibro",
+  "duraFibro5" = "duraFibro",
+  "duraFibro6" = "duraFibro",
+  "duraFibro7" = "duraFibro",
+  "duraFibro8" = "duraFibro",
+  "vascFibro" = "vascStroma",
+  "mixVascStroma" = "mix",
+  "Peri" = "vascStroma",
+  "vSMC1" = "vascStroma",
+  "vSMC2" = "vascStroma",
+  "mixEndo" = "mix",
+  "artEndo" = "Endo",
+  "capEndo" = "Endo",
+  "venEndo" = "Endo",
+  "Mast" = "Myeloid",
+  "inflamMono1" = "Myeloid",
+  "inflamMono2" = "Myeloid",
+  "inflamMono3" = "Myeloid",
+  "Granulo" = "Myeloid",
+  "mixMyeloid" = "mix",
+  "IFN-CAM" = "Myeloid",
+  "CAM" = "Myeloid",
+  "Bc" = "Bc",
+  "Tc" = "Tc",
+  "unknown" = "unknown")
+
+cluster_colors_major_groups_mix <- c( "ABC" = "#9584bd",
+                                      "arach_bordFibro" = "#87be4d",
+                                      "duraFibro" = "#f2cf22", 
+                                      "vascStroma" = "#00b8df", 
+                                      "Endo" = "#27a9b5", 
+                                      "Myeloid" = "#e04c73",
+                                      "Bc" = "#bf72ad",
+                                      "Tc" = "#dd4e10", 
+                                      "mix" = "grey")
+
+major_group_vector <- cluster_to_group_mix[Fibro_seurat$snRNA_annotation_all]
+names(major_group_vector) <- colnames(Fibro_seurat)
+Fibro_seurat <- AddMetaData(Fibro_seurat, metadata = major_group_vector, col.name = "snRNA_major_group_mix")
+
+qsave(Fibro_seurat, file.path(result_dir, "9.3_Fibro_seurat_snRNA_reference_prediction.qs"))
+
+#plotting
+DefaultAssay(Fibro_seurat_pred) <- "SCT"
+Idents(Fibro_seurat_pred) <- "seurat_clusters"
+DefaultAssay(Fibro_seurat) <- "SCT"
+Idents(Fibro_seurat) <- "seurat_clusters"
+
+p1 <- DimPlot(snRNA_obj, reduction = "umap", group.by = "annotated_manuscript", label = TRUE, label.size = 3,
+              repel = TRUE, cols = cluster_colors) + NoLegend() + ggtitle("snRNA-seq") + ylim(-19,19)
+p2 <- DimPlot(Fibro_seurat_pred, reduction = "ref.umap", group.by = "seurat_clusters_normal", label = TRUE,
+              label.size = 3, repel = TRUE) + NoLegend() + ggtitle("Xenium") +ylim(-19,19)
+p <- p1 + p2
+ggsave(file.path(result_dir, "9.3_DimPlot_ref_Plot_Fibro_seurat_snRNA_all.pdf"), p , width = 7, heigh = 5)
+
+p2 <- FeaturePlot(Fibro_seurat_pred, features = "predicted.celltype.score", reduction = "ref.umap", label = T, repel = T, pt.size = 0.8) +
+  ylim(-19,19) + ggtitle("Xenium")
+p <- p1 + p2
+ggsave(file.path(result_dir, "9.3_DimPlot_ref_Plot_pred_Fibro_seurat_snRNA_all.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(Fibro_seurat_pred, group.by = "predicted.celltype", label = T, cols = cluster_colors)
+ggsave(file.path(result_dir, "9.3_DimPlot_snRNAseq_predicted.celltypes_seurat_Fibro_all.pdf"), p , width = 10, heigh = 8)
+
+p <- FeaturePlot(Fibro_seurat_pred, features = cluster,  reduction = "umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+ggsave(file.path(result_dir, "9.3_FeaturePlot_cohort1_predicted.celltypes_Fibro_seurat_snRNA_all.pdf"), p , width = 50, heigh = 100, limitsize = F)
+
+p <- DimPlot(Fibro_seurat, group.by = "snRNA_annotation_all", cols = cluster_colors)
+ggsave(file.path(result_dir, "9.3_DimPlot_Fibro_seurat_transferred_labels_snRNA_all.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(Fibro_seurat, split.by = "snRNA_annotation_all", cols = cluster_colors)
+ggsave(file.path(result_dir, "9.3_DimPlot_Fibro_seurat_splitbytransferred_labels_snRNA_all.pdf"), p , width = 30, heigh = 5)
+
+p <- DimPlot(Fibro_seurat, group.by = "snRNA_major_group_mix", cols = cluster_colors_major_groups_mix)
+ggsave(file.path(result_dir, "9.3_DimPlot_Fibro_seurat_transferred_labels_major_group_mix.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(Fibro_seurat, split.by = "snRNA_major_group_mix", cols = cluster_colors_major_groups_mix)
+ggsave(file.path(result_dir, "9.3_DimPlot_Fibro_seurat_transferred_labels_major_group_mix_split.pdf"), p , width = 15, heigh = 5)
+```
+
+# 10.0 Dural Fibroblast Analysis
+
+Select the dural fibroblasts from the fibroblast object and repeat the integration and clustering workflow. The refined object is used for reference mapping, condition comparisons, and trajectory analysis.
+
+```{r step-029, eval=FALSE}
+duraFibro_subset <- subset(Fibro_seurat, idents = c("0", "1", "4")) #only those are clear duraFibro
+
+#reclustering
+duraFibro_subset@assays$integrated <- NULL
+duraFibro_subset@assays$SCT <- NULL
+
+# split by sample
+DefaultAssay(duraFibro_subset) <- "Xenium"
+duraFibro_list <- SplitObject(duraFibro_subset, split.by = "sample")
+
+# SCTransform per sample
+duraFibro_list <- lapply(duraFibro_list, function(x) {
+  SCTransform(x, vst.flavor = "v2", assay = "Xenium", verbose = TRUE)
+})
+
+# re-integration and re-clustering 
+features <- SelectIntegrationFeatures(object.list = duraFibro_list, nfeatures = 3000)
+
+common_scale_features <- Reduce(intersect, lapply(duraFibro_list, function(x) {
+  rownames(GetAssayData(x, assay = "SCT", layer = "scale.data"))}))
+length(common_scale_features)
+features <- intersect(features, common_scale_features)
+length(features)
+
+duraFibro_list <- PrepSCTIntegration(duraFibro_list, anchor.features = features) 
+
+anchors <- FindIntegrationAnchors(duraFibro_list, normalization.method = "SCT",anchor.features = features)
+
+qsave(anchors, file.path(result_dir, "10.0_integration_anchors_duraFibro_subset.qs"))
+
+duraFibro_combined <- IntegrateData(anchors, normalization.method = "SCT") |>
+  RunPCA(verbose = T)
+duraFibro_combined <- RunPCA(duraFibro_combined, verbose = TRUE)
+ElbowPlot(duraFibro_combined, ndims = 50)
+duraFibro_combined <- RunUMAP(duraFibro_combined, dims = 1:30) #change dims
+duraFibro_combined <- FindNeighbors(duraFibro_combined, dims = 1:30) #change dims
+qsave(duraFibro_combined, file.path(result_dir, "10.0_duraFibro_subset_integrated_before_clustering.qs"))
+
+duraFibro_combined$integrated_snn_res.0.3 <- NULL
+res_check <- FindClusters(duraFibro_combined, resolution = c(0.05, 0.075, 0.1, 0.15, 0.2))
+tree <- clustree(res_check)
+ggsave(file.path(result_dir, "10.0_duraFibro_subset_reclustering_restree.pdf"), tree, width = 10, height = 5)
+
+duraFibro_seurat <- FindClusters(duraFibro_combined, resolution = 0.075) #change resolution
+duraFibro_seurat <- RunUMAP(duraFibro_seurat, dims = 1:30, return.model = T) #mreturnmodle true to save umap projection
+p <- DimPlot(duraFibro_seurat, label = T) 
+ggsave(file.path(result_dir, "10.0_duraFibro_DimPlot_res0.075.pdf"), p, width = 6, height = 6)
+
+p <- DimPlot(duraFibro_seurat, split.by = "seurat_clusters")
+ggsave(file.path(result_dir, "10.0_duraFibro_DimPlot_cluster_res0.075.pdf"), p, width =15, height = 6)
+
+qsave(duraFibro_seurat, file.path(result_dir, "10.0_duraFibro_subset_integrated_clustering_res0.075.qs"))
+
+split_objects <- SplitObject(duraFibro_seurat, split.by = "sample")
+qsave(split_objects, file.path(result_dir, "10.0_duraFibro_seurat-duraFibro_wo_mix_split_objects_samples.qs"))
+
+
+#seurat clusters
+cluster_color <- c( "0" = "#87be4d",
+                    "2" = "#66c69b", 
+                    "1" = "#ee756d",
+                    "3" = "#d49005")
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    group.by = "seurat_clusters",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5, 
+    cols = cluster_color
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "10.0_ImageDimPlot_duraFibro_wo_mix_seurat_clusters_0.075.pdf"),
+  combined_plot,
+  width = 12,
+  height = 8
+)
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    split.by = "seurat_clusters",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5, 
+    cols = cluster_color
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "10.0_ImageDimPlot_duraFibro_wo_mix_splitbyseurat_clusters_0.075.pdf"),
+  combined_plot,
+  width = 12,
+  height = 12
+)
+
+#split.by 
+DefaultAssay(duraFibro_seurat) <- "SCT"
+Idents(duraFibro_seurat) <- "seurat_clusters"
+cluster_levels <- levels(Idents(duraFibro_seurat))
+cluster_colors_seurat <- Seurat:::DiscretePalette(length(cluster_levels))
+names(cluster_colors_seurat) <- cluster_levels
+
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  obj <- split_objects[[sample_name]]
+  
+  celltypes <- sort(unique(obj$seurat_clusters))
+  
+  plots <- lapply(celltypes, function(ct) {
+    
+    obj$highlight <- ifelse(
+      obj$seurat_clusters == ct,
+      as.character(ct),
+      "Other"
+    )
+    
+    ImageDimPlot(
+      obj,
+      group.by = "highlight",
+      cols = c( "Other" = "grey85", 
+                cluster_color),
+      #cols = c(
+      #  "Other" = "grey85",
+      #  cluster_colors_seurat[as.character(ct)]
+      #), #if you want to copy color from UMAP
+      border.size = NA,
+      dark.background = FALSE,
+      size = 1
+    ) +
+      ggtitle(paste(sample_name, "-", ct))
+    
+  })
+  
+  wrap_plots(plots, ncol = 3)
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(
+    result_dir,
+    "10.0_ImageDimPlot_duraFibro_cluster_highlighted_0.075.pdf"
+  ),
+  combined_plot,
+  width = 45,
+  height = 30, 
+  limitsize = F
+)
+```
+
+## 10.1 Identify Cluster Markers
+
+Find genes enriched in each cluster, rank the results, and export the marker tables. Where shown below, prepare the SCT assay before comparing clusters.
+
+```{r step-030, eval=FALSE}
+duraFibro_seurat <- PrepSCTFindMarkers(duraFibro_seurat)
+qsave(duraFibro_seurat, file.path(result_dir, "10.1_duraFibro_subset_integrated_clustering_res0.075_downstream_analysis.qs"))
+
+Idents(duraFibro_seurat) <- "seurat_clusters"
+markers_seurat <- FindAllMarkers(object=duraFibro_seurat,
+                                 test.use="wilcox",
+                                 layer="data",
+                                 only.pos=FALSE,
+                                 max.cells.per.ident=1000)
+
+markers_sorted <- markers_seurat %>%
+  arrange(cluster, p_val_adj, desc(avg_log2FC))
+marker_list <- split(markers_sorted, markers_sorted$cluster)
+write.xlsx(marker_list, file.path(result_dir, "10.1_duraFibro_subset_Cluster_Markers_seurat_res0.075.xlsx"))
+
+markers_top = markers_seurat %>% 
+  dplyr::group_by(cluster) %>% 
+  dplyr::arrange(p_val_adj, avg_log2FC) %>% 
+  dplyr::slice_head(n=10) %>% 
+  dplyr::ungroup() %>% 
+  as.data.frame()
+
+DefaultAssay(duraFibro_seurat) <- "SCT"
+p <- DotPlot(duraFibro_seurat, features=markers_top$gene %>% unique()) +
+  viridis::scale_color_viridis() + 
+  ylab("Cluster") + xlab("") + 
+  guides(size=guide_legend(order=1, title="Percent expressed"), color=guide_colorbar(title="Scaled Expression")) + 
+  ggtitle("Top markers per cluster (expression scaled)") + RotatedAxis()
+ggsave(file.path(result_dir, "10.1_DP_top_marker_genes_duraFibro_seurat_res0.075_top10.pdf"), p , width = 10, heigh = 4)
+
+#genes of interest snRNA-seq 
+genes <- c("ANGPT1", "CFH", "FGF7", "SVEP1", "PI16", "SLC4A4", "KCNMA1")
+
+DefaultAssay(duraFibro_seurat) <- "SCT"
+p <- FeaturePlot(duraFibro_seurat, features = genes) #blue
+ggsave(file.path(result_dir, "10.1_FP_duraFibro_genes_of_interest.pdf"), p, width = 12, height = 15)
+
+p <- lapply(genes, function(genes) {
+  FeaturePlot(duraFibro_seurat, features = genes, pt.size = 0.5) +
+    scale_colour_gradient(low = "#d3d3d3", high = "red") +
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank()
+    )
+})
+p <- wrap_plots(p, ncol =1)
+ggsave(file.path(result_dir, "10.1_FP_duraFibro_genes_of_interest_costum_panel.pdf"), p, width = 10, height = 25)
+
+p <- DotPlot(duraFibro_seurat, features=genes) +
+  viridis::scale_color_viridis() + 
+  ylab("Cluster") + xlab("") + 
+  guides(size=guide_legend(order=1, title="Percent expressed"), color=guide_colorbar(title="Scaled Expression")) + 
+  RotatedAxis()
+ggsave(file.path(result_dir, "10.1_DP_duraFibro_genes_of_interest.pdf"), p, width = 5, height = 3)
+
+#ImageFeaturePlot
+genes <- c("CFH", "FGF7", "SVEP1", "PI16", "SLC4A4", "KCNMA1")
+
+pdf(
+  file.path(result_dir, "10.1_ImageFeaturePlot_duraFibro_genes_of_interest.pdf"),
+  width = 14,
+  height = 12
+)
+
+for (gene in genes) {
+  
+  gene_maps <- lapply(names(split_objects), function(sample_name) {
+    
+    obj <- split_objects[[sample_name]]
+    DefaultAssay(obj) <- "SCT"
+    
+    ImageFeaturePlot(
+      obj,
+      features = gene,
+      border.size = NA,
+      dark.background = FALSE,
+      size = 1.5,
+      cols = c("grey95", "red")
+    ) +
+      ggtitle(sample_name) +
+      theme_void() +
+      theme(
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+        legend.position = "right",
+        plot.margin = margin(2, 2, 2, 2)
+      )
+  })
+  
+  gene_plot <- wrap_plots(gene_maps, ncol = 3) +
+    plot_annotation(
+      title = paste0("Fibroblast expression: ", gene),
+      theme = theme(
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+    )
+  
+  print(gene_plot)
+}
+
+dev.off()
+```
+
+## 10.2 Map to the Fibroblast Reference
+
+Use the snRNA-seq fibroblast reference to transfer more specific labels to the spatial subset. Compare the mapped embedding and prediction confidence with the de novo spatial clusters.
+
+```{r step-031, eval=FALSE}
+DefaultAssay(duraFibro_seurat) <- "SCT"
+DefaultAssay(snRNA_Fibro) <- "SCT"
+snRNA_Fibro$annotated_manuscript <-  recode(snRNA_Fibro$seurat_clusters, "0" = "duraFibro1", "1" = "duraFibro3", "2" = "duraFibro4", "3" = "duraFibro2", "4" = "arach_bordFibro", "5" = "duraFibro7", "6" = "duraFibro5", "7" = "duraFibro8", "8" = "ABC", "9" = "duraFibro6")
+anchors <- FindTransferAnchors(reference = snRNA_Fibro, query = duraFibro_seurat, dims = 1:30, reference.reduction = "pca",normalization.method = "SCT", reference.assay = "integrated")
+predictions <- TransferData(anchorset = anchors, refdata = snRNA_Fibro$annotated_manuscript,dims = 1:30)
+duraFibro_seurat_pred <- AddMetaData(duraFibro_seurat, metadata = predictions)
+#if UMAP emddings are not save, you need to reun it here RUNUMAP()
+duraFibro_seurat_pred <- MapQuery(anchorset = anchors, reference = snRNA_Fibro, query = duraFibro_seurat_pred,refdata = list(celltype = "annotated_manuscript"), reference.reduction = "pca", reduction.model = "umap")
+cluster <- as.character(unique(snRNA_Fibro@meta.data$annotated_manuscript))
+# transfer labels 
+#label low-confidence cells as "unknown" 
+duraFibro_seurat$snRNA_annotation_Fibro <- ifelse(
+  duraFibro_seurat_pred$prediction.score.max < 0.3,
+  "unknown",
+  duraFibro_seurat_pred$predicted.id
+)
+
+
+cluster_colors = c("duraFibro1" = "#66c69b", 
+                   "duraFibro3" = "#ee756d", 
+                   "duraFibro4" = "#d49005", 
+                   "duraFibro2" = "#7caee5", 
+                   "arach_bordFibro" = "#87be4d", 
+                   "duraFibro7" = "#3cac57",
+                   "duraFibro5" = "#828dc6", 
+                   "duraFibro8" = "#ef7e48", 
+                   "ABC" = "#9584bd", 
+                   "duraFibro6" = "#ec67a2" 
+)
+
+#plotting
+DefaultAssay(duraFibro_seurat_pred) <- "SCT"
+Idents(duraFibro_seurat_pred) <- "seurat_clusters"
+DefaultAssay(duraFibro_seurat) <- "SCT"
+Idents(duraFibro_seurat) <- "seurat_clusters"
+
+p1 <- DimPlot(snRNA_Fibro, reduction = "umap", group.by = "annotated_manuscript", label = TRUE, label.size = 3,
+              repel = TRUE, cols = cluster_colors) + NoLegend() + ggtitle("snRNA-seq") + ylim(-19,19)
+p2 <- DimPlot(duraFibro_seurat_pred, reduction = "ref.umap", group.by = "seurat_clusters_normal", label = TRUE,
+              label.size = 3, repel = TRUE) + NoLegend() + ggtitle("Xenium") +ylim(-19,19)
+p <- p1 + p2
+ggsave(file.path(result_dir, "10.2_DimPlot_ref_Plot_duraFibro_seurat_snRNA_Fibro.pdf"), p , width = 7, heigh = 5)
+
+p2 <- FeaturePlot(duraFibro_seurat_pred, features = "predicted.celltype.score", reduction = "ref.umap", label = T, repel = T, pt.size = 0.8) +
+  ylim(-19,19) + ggtitle("Xenium")
+p <- p1 + p2
+ggsave(file.path(result_dir, "10.2_DimPlot_ref_Plot_pred_duraFibro_seurat_snRNA_Fibro.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(duraFibro_seurat_pred, group.by = "predicted.celltype", label = T, cols = cluster_colors)
+ggsave(file.path(result_dir, "10.2_DimPlot_snRNAseq_predicted.celltypes_duraFibro_seurat_snRNA_Fibro.pdf"), p , width = 10, heigh = 8)
+
+p <- FeaturePlot(duraFibro_seurat_pred, features = cluster,  reduction = "umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+ggsave(file.path(result_dir, "10.2_FeaturePlot_cohort1_predicted.celltypes_duraFibro_seurat_snRNA_Fibro.pdf"), p , width = 50, heigh = 30, limitsize = F)
+
+p <- DimPlot(duraFibro_seurat, group.by = "snRNA_annotation_Fibro", cols = cluster_colors)
+ggsave(file.path(result_dir, "10.2_DimPlot_seurat_transferred_labels_duraFibro_seurat_snRNA_Fibro.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(duraFibro_seurat, split.by = "snRNA_annotation_Fibro", cols = cluster_colors)
+ggsave(file.path(result_dir, "10.2_DimPlot_duraFibro_seurat_splitbytransferred_labels_snRNA_Fibro.pdf"), p , width = 30, heigh = 5)
+
+
+
+
+rm(duraFibro_seurat_pred, predictions)
+```
+
+## 10.3 Map to the Full snRNA-seq Reference
+
+Map the spatial subset against the full snRNA-seq reference as a complementary annotation check. Inspect the transferred labels and confidence scores in relation to the subset-specific mapping.
+
+```{r step-032, eval=FALSE}
+DefaultAssay(duraFibro_seurat) <- "SCT"
+DefaultAssay(snRNA_obj) <- "SCT"
+
+anchors <- FindTransferAnchors(reference = snRNA_obj, query = duraFibro_seurat, dims = 1:30, reference.reduction = "pca",normalization.method = "SCT", reference.assay = "integrated")
+predictions <- TransferData(anchorset = anchors, refdata = snRNA_obj$annotated_manuscript,dims = 1:30)
+duraFibro_seurat_pred <- AddMetaData(duraFibro_seurat, metadata = predictions)
+#if UMAP emddings are not save, you need to reun it here RUNUMAP()
+duraFibro_seurat_pred <- MapQuery(anchorset = anchors, reference = snRNA_obj, query = duraFibro_seurat_pred,refdata = list(celltype = "annotated_manuscript"), reference.reduction = "pca", reduction.model = "umap")
+cluster <- as.character(unique(snRNA_obj@meta.data$annotated_manuscript))
+# transfer labels 
+#label low-confidence cells as "unknown" 
+duraFibro_seurat$snRNA_annotation_all <- ifelse(
+  duraFibro_seurat_pred$prediction.score.max < 0.3,
+  "unknown",
+  duraFibro_seurat_pred$predicted.id
+)
+
+cluster_colors <- c(
+  "ABC" = "#9584bd",
+  "arach_bordFibro" = "#87be4d",
+  "duraFibro1" = "#38b083",
+  "duraFibro2" = "#5c96d0",
+  "duraFibro3" = "#ee756e",
+  "duraFibro4" = "#d49005",
+  "duraFibro5" = "#828cc5",
+  "duraFibro6" = "#ec67a2",
+  "duraFibro7" = "#3bab4b",
+  "duraFibro8" = "#d88356",
+  "vascFibro" = "#9ea71e",
+  "mixVascStroma" = "#a27eb7",
+  "Peri" = "#06b8e0",
+  "vSMC1" = "#bb4d63",
+  "vSMC2" = "#8e7eb9",
+  "mixEndo" = "#b078b1",
+  "artEndo" = "#3caa34",
+  "capEndo" = "#29aab5",
+  "venEndo" = "#957e25",
+  "Mast" = "#e26aa5",
+  "inflamMono1" = "#36b39c",
+  "inflamMono2" = "#75ae2b",
+  "inflamMono3" = "#12b3e8",
+  "Granulo" = "#cf6ea8",
+  "mixMyeloid" = "#32b6b3",
+  "IFN-CAM" = "#ec67a2",
+  "CAM" = "#e38803",
+  "Bc" = "#bf72ad",
+  "Tc" = "#dd4e10",
+  "unknown" = "lightgrey")
+
+#major groups
+cluster_to_group <- c(
+  "ABC" = "ABC",
+  "arach_bordFibro" = "arach_bordFibro",
+  "duraFibro1" = "duraFibro",
+  "duraFibro2" = "duraFibro",
+  "duraFibro3" = "duraFibro",
+  "duraFibro4" = "duraFibro",
+  "duraFibro5" = "duraFibro",
+  "duraFibro6" = "duraFibro",
+  "duraFibro7" = "duraFibro",
+  "duraFibro8" = "duraFibro",
+  "vascFibro" = "vascStroma",
+  "mixVascStroma" = "vascStroma",
+  "Peri" = "vascStroma",
+  "vSMC1" = "vascStroma",
+  "vSMC2" = "vascStroma",
+  "mixEndo" = "Endo",
+  "artEndo" = "Endo",
+  "capEndo" = "Endo",
+  "venEndo" = "Endo",
+  "Mast" = "Myeloid",
+  "inflamMono1" = "Myeloid",
+  "inflamMono2" = "Myeloid",
+  "inflamMono3" = "Myeloid",
+  "Granulo" = "Myeloid",
+  "mixMyeloid" = "Myeloid",
+  "IFN-CAM" = "Myeloid",
+  "CAM" = "Myeloid",
+  "Bc" = "Bc",
+  "Tc" = "Tc",
+  "unknown" = "unknown")
+
+cluster_colors_major_groups <- c( "ABC" = "#9584bd",
+                                  "arach_bordFibro" = "#87be4d",
+                                  "duraFibro" = "#f2cf22", 
+                                  "vascStroma" = "#00b8df", 
+                                  "Endo" = "#27a9b5", 
+                                  "Myeloid" = "#e04c73",
+                                  "Bc" = "#bf72ad",
+                                  "Tc" = "#dd4e10")
+
+
+major_group_vector <- cluster_to_group[duraFibro_seurat$snRNA_annotation_all]
+names(major_group_vector) <- colnames(duraFibro_seurat)
+duraFibro_seurat <- AddMetaData(duraFibro_seurat, metadata = major_group_vector, col.name = "snRNA_major_group")
+
+
+cluster_to_group_mix <- c(
+  "ABC" = "ABC",
+  "arach_bordFibro" = "arach_bordFibro",
+  "duraFibro1" = "duraFibro",
+  "duraFibro2" = "duraFibro",
+  "duraFibro3" = "duraFibro",
+  "duraFibro4" = "duraFibro",
+  "duraFibro5" = "duraFibro",
+  "duraFibro6" = "duraFibro",
+  "duraFibro7" = "duraFibro",
+  "duraFibro8" = "duraFibro",
+  "vascFibro" = "vascStroma",
+  "mixVascStroma" = "mix",
+  "Peri" = "vascStroma",
+  "vSMC1" = "vascStroma",
+  "vSMC2" = "vascStroma",
+  "mixEndo" = "mix",
+  "artEndo" = "Endo",
+  "capEndo" = "Endo",
+  "venEndo" = "Endo",
+  "Mast" = "Myeloid",
+  "inflamMono1" = "Myeloid",
+  "inflamMono2" = "Myeloid",
+  "inflamMono3" = "Myeloid",
+  "Granulo" = "Myeloid",
+  "mixMyeloid" = "mix",
+  "IFN-CAM" = "Myeloid",
+  "CAM" = "Myeloid",
+  "Bc" = "Bc",
+  "Tc" = "Tc",
+  "unknown" = "unknown")
+
+cluster_colors_major_groups_mix <- c( "ABC" = "#9584bd",
+                                      "arach_bordFibro" = "#87be4d",
+                                      "duraFibro" = "#f2cf22", 
+                                      "vascStroma" = "#00b8df", 
+                                      "Endo" = "#27a9b5", 
+                                      "Myeloid" = "#e04c73",
+                                      "Bc" = "#bf72ad",
+                                      "Tc" = "#dd4e10", 
+                                      "mix" = "grey")
+
+major_group_vector <- cluster_to_group_mix[duraFibro_seurat$snRNA_annotation_all]
+names(major_group_vector) <- colnames(duraFibro_seurat)
+duraFibro_seurat <- AddMetaData(duraFibro_seurat, metadata = major_group_vector, col.name = "snRNA_major_group_mix")
+
+qsave(duraFibro_seurat, file.path(result_dir, "10.3_duraFibro_seurat_snRNA_reference_prediction.qs"))
+
+#plotting
+DefaultAssay(duraFibro_seurat_pred) <- "SCT"
+Idents(duraFibro_seurat_pred) <- "seurat_clusters"
+DefaultAssay(duraFibro_seurat) <- "SCT"
+Idents(duraFibro_seurat) <- "seurat_clusters"
+
+p1 <- DimPlot(snRNA_obj, reduction = "umap", group.by = "annotated_manuscript", label = TRUE, label.size = 3,
+              repel = TRUE, cols = cluster_colors) + NoLegend() + ggtitle("snRNA-seq") + ylim(-19,19)
+p2 <- DimPlot(duraFibro_seurat_pred, reduction = "ref.umap", group.by = "seurat_clusters_normal", label = TRUE,
+              label.size = 3, repel = TRUE) + NoLegend() + ggtitle("Xenium") +ylim(-19,19)
+p <- p1 + p2
+ggsave(file.path(result_dir, "10.3_DimPlot_ref_Plot_duraFibro_seurat_snRNA_all.pdf"), p , width = 7, heigh = 5)
+
+p2 <- FeaturePlot(duraFibro_seurat_pred, features = "predicted.celltype.score", reduction = "ref.umap", label = T, repel = T, pt.size = 0.8) +
+  ylim(-19,19) + ggtitle("Xenium")
+p <- p1 + p2
+ggsave(file.path(result_dir, "10.3_DimPlot_ref_Plot_pred_duraFibro_seurat_snRNA_all.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(duraFibro_seurat_pred, group.by = "predicted.celltype", label = T, cols = cluster_colors)
+ggsave(file.path(result_dir, "10.3_DimPlot_snRNAseq_predicted.celltypes_seurat_duraFibro_all.pdf"), p , width = 10, heigh = 8)
+
+p <- FeaturePlot(duraFibro_seurat_pred, features = cluster,  reduction = "umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+ggsave(file.path(result_dir, "10.3_FeaturePlot_cohort1_predicted.celltypes_duraFibro_seurat_snRNA_all.pdf"), p , width = 50, heigh = 100, limitsize = F)
+
+p <- DimPlot(duraFibro_seurat, group.by = "snRNA_annotation_all", cols = cluster_colors)
+ggsave(file.path(result_dir, "10.3_DimPlot_duraFibro_seurat_transferred_labels_snRNA_all.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(duraFibro_seurat, split.by = "snRNA_annotation_all", cols = cluster_colors)
+ggsave(file.path(result_dir, "10.3_DimPlot_duraFibro_seurat_splitbytransferred_labels_snRNA_all.pdf"), p , width = 30, heigh = 5)
+
+p <- DimPlot(duraFibro_seurat, group.by = "snRNA_major_group_mix", cols = cluster_colors_major_groups_mix)
+ggsave(file.path(result_dir, "10.3_DimPlot_duraFibro_seurat_transferred_labels_major_group_mix.pdf"), p , width = 7, heigh = 5)
+
+p <- DimPlot(duraFibro_seurat, split.by = "snRNA_major_group_mix", cols = cluster_colors_major_groups_mix)
+ggsave(file.path(result_dir, "10.3_DimPlot_duraFibro_seurat_transferred_labels_major_group_mix_split.pdf"), p , width = 15, heigh = 5)
+```
+
+## 10.4 Differential Expression Between Conditions
+
+Compare conditions within the selected clusters using the assay and tests specified below. Check group availability before testing and save each cluster comparison for downstream plots and enrichment analysis.
+
+### 10.4.1 Test Each Cluster on the SCT Assay
+
+Compare conditions within the selected clusters using the assay and tests specified below. Check group availability before testing and save each cluster comparison for downstream plots and enrichment analysis.
+
+```{r step-033, eval=FALSE}
+DefaultAssay(duraFibro_seurat) <- "SCT"
+
+duraFibro_seurat <- PrepSCTFindMarkers(
+  duraFibro_seurat,
+  assay = "SCT",
+  verbose = TRUE
+)
+
+DefaultAssay(duraFibro_seurat) <- "SCT"
+
+duraFibro_seurat$annotated <- duraFibro_seurat$seurat_clusters #change later
+Idents(duraFibro_seurat) <- "annotated"
+de_nested_list <- list()
+
+comparisons <- list(
+  c("MS", "Ctrl")
+)
+
+for (comp in comparisons) {
+  ident_1 <- comp[1]
+  ident_2 <- comp[2]
+  comp_name <- paste0(ident_1, "_vs_", ident_2)
+  
+  message("Running comparison: ", comp_name)
+  de_nested_list[[comp_name]] <- list()
+  
+  for (i in levels(duraFibro_seurat$annotated)) {
+    message("  Processing cluster: ", i)
+    
+    cells_in_cluster <- WhichCells(duraFibro_seurat, idents = i)
+    cluster_meta <- duraFibro_seurat@meta.data[cells_in_cluster, ]
+    
+    group_counts <- table(cluster_meta$condition)
+    
+    cluster_name <- paste0("Cluster_", i)
+    
+    if (all(c(ident_1, ident_2) %in% names(group_counts)) &&
+        all(group_counts[c(ident_1, ident_2)] >= 3)) {
+      
+      de <- tryCatch({
+        FindMarkers(
+          duraFibro_seurat,
+          ident.1 = ident_1,
+          ident.2 = ident_2,
+          subset.ident = i,
+          group.by = "condition",
+          recorrect_umi = FALSE
+        )
+      }, error = function(e) {
+        message("    ERROR in cluster ", i, ": ", conditionMessage(e))
+        return(NULL)
+      })
+      
+      if (!is.null(de) && nrow(de) > 0) {
+        de$gene <- rownames(de)
+        de <- de[order(de$p_val_adj, -de$avg_log2FC), ]
+        de_nested_list[[comp_name]][[cluster_name]] <- de
+      } else {
+        message("    No DE genes found for cluster ", i)
+        de_nested_list[[comp_name]][[cluster_name]] <- data.frame(
+          Note = "No DE genes found despite sufficient cells"
+        )
+      }
+      
+    } else {
+      message("    Skipping cluster ", i, " — too few cells in one or both groups")
+      de_nested_list[[comp_name]][[cluster_name]] <- data.frame(
+        Note = paste("Too few cells in", ident_1, "or", ident_2)
+      )
+    }
+  }
+}
+
+saveRDS(de_nested_list, "10.4.1_de_duraFibro_nested_list_SCT_condition.rds")
+
+# Save each comparison as its own Excel file
+for (comp_name in names(de_nested_list)) {
+  file_name <- file.path(
+    result_dir,
+    paste0("10.4.1_DE_SCT_duraFibro_subsets_", comp_name, ".xlsx")
+  )
+  write.xlsx(de_nested_list[[comp_name]], file = file_name)
+  message("Saved: ", file_name)
+}
+```
+
+### 10.4.2 Visualize Differential Expression
+
+Read the differential-expression tables and plot effect size against significance. Highlight the selected up- and downregulated genes and label the top candidates according to the criteria in the code.
+
+```{r step-034, eval=FALSE}
+de_file <- file.path(result_dir, "10.4.1_DE_SCT_duraFibro_subsets_MS_vs_Ctrl.xlsx") 
+
+all_clusters <- getSheetNames(de_file)
+
+#Loop over clusters 
+for (cluster in all_clusters) {
+  
+  message("Processing cluster: ", cluster)
+  
+  # Read cluster sheet
+  de_data <- read.xlsx(de_file, sheet = cluster)
+  volcano_genes <- de_data
+  
+  #remove MT, RPL, RPS genes and Lnc 
+  volcano_genes <- volcano_genes %>% filter(!grepl("^MT|^RPL|^RPS|^ZNF|orf|^LINC|^ENSG|\\.", gene))
+  #Define sig. up/down-reg genes
+  volcano_genes$DE <- "NO"
+  volcano_genes$DE[volcano_genes$avg_log2FC > 0.5 & volcano_genes$p_val_adj < 0.001] <- "Up" 
+  volcano_genes$DE[volcano_genes$avg_log2FC < -0.5 & volcano_genes$p_val_adj < 0.001] <- "Down" 
+  #sign. up & down
+  volcano_genes$sig <- ifelse(volcano_genes$DE == "NO", "", volcano_genes$gene)
+  sig <- volcano_genes$sig
+  volcano_genes$sig <- ifelse(volcano_genes$gene %in% sig, volcano_genes$gene, NA)
+  volcano_genes$DE <- factor(volcano_genes$DE, levels = c("Down", "NO", "Up"))
+  volcano_genes$logP <- -log10(volcano_genes$p_val_adj)
+  volcano_genes$logP <- pmin(volcano_genes$logP, 50)
+  
+  # Count up- and down-regulated genes
+  n_up <- sum(volcano_genes$DE == "Up", na.rm = TRUE)
+  n_down <- sum(volcano_genes$DE == "Down", na.rm = TRUE)
+  
+  # Filter only significant DE genes
+  sig_genes <- volcano_genes %>% 
+    filter(DE != "NO") 
+  # Rank first by adjusted p-value, then by absolute log2FC
+  top_genes <- sig_genes %>%
+    arrange(p_val_adj, desc(abs(avg_log2FC))) %>%  # first p-value, then log2FC
+    slice_head(n = 400) %>%                         # top 500 genes
+    pull(gene)
+  
+  # Update sig column to label only top 400 genes
+  volcano_genes$interest <- ifelse(volcano_genes$gene %in% top_genes, volcano_genes$gene, NA)
+  
+  p <- ggplot(volcano_genes, aes(x = avg_log2FC, y = logP, color = DE, label = sig)) +
+    geom_vline(xintercept = c(-0.5, 0.5), color = "gray40", linetype = "dashed") +
+    geom_hline(yintercept = -log10(0.001), color = "gray40", linetype = "dashed") + 
+    geom_point(size = 3, alpha = 0.8) +
+    scale_color_manual(values = c("Down" = "black", "NO" = "grey70", "Up" = "#3d70b5"),
+                       labels = c("Down", "ns", "Up")) +
+    geom_text_repel(max.overlaps = 50, size = 3) +
+    theme_classic(base_size = 14) +
+    labs(
+      x = "log Fold Change",
+      y = expression(-log[10]("adjusted p-value")),
+      color = "Regulation"
+    ) +
+    annotate("text", x = max(volcano_genes$avg_log2FC), y = max(volcano_genes$logP),
+             label = paste0("Up: ", n_up), hjust = 1, vjust = -0.5, color = "#3d70b5", size = 5) +
+    annotate("text", x = min(volcano_genes$avg_log2FC), y = max(volcano_genes$logP),
+             label = paste0("Down: ", n_down), hjust = 0, vjust = -0.5, color = "black", size = 5)
+  
+  # Save per cluster
+  out_file <- paste0(file.path(result_dir, "10.4.2_VolcanoPlot_duraFibro_"), cluster, "_DE.pdf")
+  ggsave(out_file, plot = p, width = 10, height = 7)
+}
+
+rm(de_data, p, sig_genes, volcano_genes, all_clusters, cluster, de_file, n_down, n_up, out_file, sig, top_genes)
+```
+
+## 10.5 Compare the Combined Dural Fibroblasts
+
+Combine the selected dural fibroblast populations for an overall condition comparison, then export the differential-expression table. This complements the cluster-specific comparisons above.
+
+```{r step-035, eval=FALSE}
+Idents(duraFibro_seurat) <- "condition"
+
+DefaultAssay(duraFibro_seurat) <- "SCT"
+DE_duraFibro_overall <- FindMarkers(
+  duraFibro_seurat,
+  ident.1 = "MS",
+  ident.2 = "Ctrl",
+  group.by = "condition",
+  recorrect_umi = FALSE
+)
+
+DE_duraFibro_overall <- DE_duraFibro_overall %>%
+  rownames_to_column(var = "gene") %>%
+  arrange(p_val_adj, desc(avg_log2FC))
+
+write_xlsx(DE_duraFibro_overall, file.path(result_dir, "10.5_DE_duraFibro_overall.xlsx"))
+```
+
+### 10.5.1 Visualize Differential Expression
+
+Read the differential-expression tables and plot effect size against significance. Highlight the selected up- and downregulated genes and label the top candidates according to the criteria in the code.
+
+```{r step-036, eval=FALSE}
+de_file <- file.path(result_dir, "10.5_DE_duraFibro_overall.xlsx") 
+
+all_clusters <- getSheetNames(de_file)
+
+#Loop over clusters 
+for (cluster in all_clusters) {
+  
+  message("Processing cluster: ", cluster)
+  
+  # Read cluster sheet
+  de_data <- read.xlsx(de_file, sheet = cluster)
+  volcano_genes <- de_data
+  
+  #remove MT, RPL, RPS genes and Lnc 
+  volcano_genes <- volcano_genes %>% filter(!grepl("^MT|^RPL|^RPS|^ZNF|orf|^LINC|^ENSG|\\.", gene))
+  #Define sig. up/down-reg genes
+  volcano_genes$DE <- "NO"
+  volcano_genes$DE[volcano_genes$avg_log2FC > 0.5 & volcano_genes$p_val_adj < 0.001] <- "Up" 
+  volcano_genes$DE[volcano_genes$avg_log2FC < -0.5 & volcano_genes$p_val_adj < 0.001] <- "Down" 
+  #sign. up & down
+  volcano_genes$sig <- ifelse(volcano_genes$DE == "NO", "", volcano_genes$gene)
+  sig <- volcano_genes$sig
+  volcano_genes$sig <- ifelse(volcano_genes$gene %in% sig, volcano_genes$gene, NA)
+  volcano_genes$DE <- factor(volcano_genes$DE, levels = c("Down", "NO", "Up"))
+  volcano_genes$logP <- -log10(volcano_genes$p_val_adj)
+  volcano_genes$logP <- pmin(volcano_genes$logP, 50)
+  
+  # Count up- and down-regulated genes
+  n_up <- sum(volcano_genes$DE == "Up", na.rm = TRUE)
+  n_down <- sum(volcano_genes$DE == "Down", na.rm = TRUE)
+  
+  # Filter only significant DE genes
+  sig_genes <- volcano_genes %>% 
+    filter(DE != "NO") 
+  # Rank first by adjusted p-value, then by absolute log2FC
+  top_genes <- sig_genes %>%
+    arrange(p_val_adj, desc(abs(avg_log2FC))) %>%  # first p-value, then log2FC
+    slice_head(n = 400) %>%                         # top 500 genes
+    pull(gene)
+  
+  # Update sig column to label only top 400 genes
+  volcano_genes$interest <- ifelse(volcano_genes$gene %in% top_genes, volcano_genes$gene, NA)
+  
+  p <- ggplot(volcano_genes, aes(x = avg_log2FC, y = logP, color = DE, label = sig)) +
+    geom_vline(xintercept = c(-0.5, 0.5), color = "gray40", linetype = "dashed") +
+    geom_hline(yintercept = -log10(0.001), color = "gray40", linetype = "dashed") + 
+    geom_point(size = 3, alpha = 0.8) +
+    scale_color_manual(values = c("Down" = "black", "NO" = "grey70", "Up" = "#3d70b5"),
+                       labels = c("Down", "ns", "Up")) +
+    geom_text_repel(max.overlaps = 50, size = 3) +
+    theme_classic(base_size = 14) +
+    labs(
+      x = "log Fold Change",
+      y = expression(-log[10]("adjusted p-value")),
+      color = "Regulation"
+    ) +
+    annotate("text", x = max(volcano_genes$avg_log2FC), y = max(volcano_genes$logP),
+             label = paste0("Up: ", n_up), hjust = 1, vjust = -0.5, color = "#3d70b5", size = 5) +
+    annotate("text", x = min(volcano_genes$avg_log2FC), y = max(volcano_genes$logP),
+             label = paste0("Down: ", n_down), hjust = 0, vjust = -0.5, color = "black", size = 5)
+  
+  # Save per cluster
+  out_file <- paste0(file.path(result_dir, "10.5.1_VolcanoPlot_duraFibro_merged_"), cluster, "_DE.pdf")
+  ggsave(out_file, plot = p, width = 10, height = 7)
+}
+
+rm(de_data, p, sig_genes, volcano_genes, all_clusters, cluster, de_file, n_down, n_up, out_file, sig, top_genes)
+```
+
+### 10.5.2 Gene Ontology Enrichment
+
+Analyze the selected up- and downregulated gene sets with enrichGO and export the enrichment tables and plots. Interpret the results in the context of the gene-selection thresholds and background settings used below.
+
+```{r step-037, eval=FALSE}
+set.seed(42)
+
+read_all_sheets <- function(path) {
+  sheet_names <- excel_sheets(path)
+  sheets <- lapply(sheet_names, function(s) read_excel(path, sheet = s))
+  names(sheets) <- sheet_names
+  return(sheets)
+}
+DE_MS_vs_Ctrl <- read_all_sheets(file.path(result_dir, "10.5_DE_duraFibro_overall.xlsx"))
+
+# Function for enrichment and plotting
+run_enrichment_and_plotting <- function(de_df, gene_list, direction, cluster, comparison) {
+  if (length(gene_list) < 5) {
+    message("Not enough genes for ", direction, "regulated ", cluster, " in ", comparison)
+    return(NULL)
+  }
+  ego <- enrichGO(
+    gene          = gene_list,
+    OrgDb         = org.Hs.eg.db,
+    keyType       = "SYMBOL",
+    ont           = "ALL",
+    pAdjustMethod = "BH",
+    qvalueCutoff  = 0.05,
+    readable      = TRUE
+  )
+  if (is.null(ego) || nrow(ego) == 0) {
+    message("No enrichment results for ", direction, "regulated ", cluster, " in ", comparison)
+    return(NULL)
+  }
+  # Save GO table
+  file_base <- paste0(file.path(result_dir, "10.5.2_GO_DE_duraFibro_merged_"), direction, "", cluster, "", comparison)
+  write.xlsx(as.data.frame(ego), file = paste0(file_base, ".xlsx"))
+  # Plots
+  pdf(paste0(file_base, ".pdf"), width = 8, height = 6)
+  tryCatch({
+    print(dotplot(ego) + ggtitle(paste("Dotplot -", direction, "-", cluster, "-", comparison)))
+    print("dotplot")
+    print(barplot(ego) + ggtitle(paste("Dotplot -", direction, "-", cluster, "-", comparison)))
+    print("barplot")
+    sim <- pairwise_termsim(ego)
+    print(emapplot(sim) + ggtitle(paste("Enrichment Map -", direction, "-", cluster, "-", comparison)))
+    print("emapplot")
+    print(emapplot(sim, group = T) + ggtitle(paste("Cluster Map -", direction, "-", cluster, "-", comparison)))
+    print("emapplot_cluster")
+    de_df <- as.data.frame(de_df)
+    rownames(de_df) <- de_df$gene
+    fc_vector <- de_df[gene_list, "avg_log2FC"]
+    names(fc_vector) <- gene_list
+    print(cnetplot(ego, categorySize = "pvalue", foldChange = fc_vector) +
+            ggtitle(paste("Cnetplot -", direction, "-", cluster, "-", comparison)))
+    print("cnetplot")
+  }, error = function(e) {
+    message("Plotting failed for ", direction, "regulated ", cluster, " in ", comparison, ": ", e$message)
+  })
+  dev.off()
+}
+
+#Main loop
+de_df <- DE_MS_vs_Ctrl[["Sheet1"]]
+
+# Upregulated genes
+gene_list_up <- de_df %>%
+  filter(avg_log2FC > 0.5 & p_val_adj < 0.001) %>%
+  pull(gene)
+
+run_enrichment_and_plotting(de_df, gene_list_up, "Up", "All_duraFibros", "MS_vs_Ctrl")
+
+# Downregulated genes
+gene_list_down <- de_df %>%
+  filter(avg_log2FC < -0.5 & p_val_adj < 0.001) %>%
+  pull(gene)
+
+run_enrichment_and_plotting(de_df, gene_list_down, "Down", "All_duraFibros", "MS_vs_Ctrl")
+```
+
+## 10.6 Construct and Order the Trajectory
+
+Build the Monocle input from RNA counts and cell metadata, retain the selected embedding information, and learn the trajectory graph. Order cells from the chosen root before examining pseudotime-associated genes.
+
+```{r step-038, eval=FALSE}
+duraFibro_seurat <- qread(file.path(result_dir, "10.3_duraFibro_seurat_snRNA_reference_prediction.qs"))
+#sc_combined <- from the manuscript
+duraFibro_seurat$sample_roi <-
+  sc_combined$sample_roi[Cells(duraFibro_seurat)]
+
+#convert Seurat object into Monocle object
+#integrated and SCT (slot = "scale.data") do not work as those are not saved as absolute values by Seurat but as differences from raw counts. So don't use scale.data
+#best is to use "RNA", "counts"
+library(monocle3)
+
+Idents(duraFibro_seurat) <- "seurat_clusters"
+duraFibro_seurat$annotated <- duraFibro_seurat$seurat_clusters
+data <- GetAssayData(duraFibro_seurat, assay = "SCT", layer = "counts") #normally on RNA
+pd <- data.frame(duraFibro_seurat@meta.data)
+pData <- pd %>% dplyr::select(orig.ident, nCount_Xenium, nFeature_Xenium, annotated, seurat_clusters, sample, condition)
+fData <- data.frame(gene_short_name = row.names(data), row.names = row.names(data))
+
+Fibro_monocle <- new_cell_data_set(expression_data = data, cell_metadata = pData, gene_metadata = fData)
+
+#create data for Monocle to work with Seurat generated data
+fData(Fibro_monocle)$gene_short_name <- rownames(fData(Fibro_monocle))
+recreate.partitions <- c(rep(1, length(Fibro_monocle@colData@rownames)))
+names(recreate.partitions) <- Fibro_monocle@colData@rownames
+recreate.partitions <- as.factor(recreate.partitions)
+recreate.partitions
+Fibro_monocle@clusters@listData[["UMAP"]][["partitions"]] <- recreate.partitions
+
+#get active.ident and cell embeddings from Seurat object and write into Monocle object as the data is not converted automatically
+list.cluster <- duraFibro_seurat@active.ident
+Fibro_monocle@clusters@listData[["UMAP"]][["clusters"]] <- list.cluster
+Fibro_monocle@int_colData@listData[["reducedDims"]]@listData[["UMAP"]] <- duraFibro_seurat@reductions$umap@cell.embeddings
+
+#check if Seurat clustering is correctly transfered into Monocle
+#pull cluster colors from Seurat object
+cluster_colors = c( "0" = "#87be4d",
+                    "2" = "#66c69b", 
+                    "1" = "#ee756d",
+                    "3" = "#d49005")
+
+cluster.before.traj <- plot_cells(Fibro_monocle, label_groups_by_cluster = F, 
+                                  group_label_size = 4) + theme(legend.position = "right") +  scale_color_manual(values = cluster_colors)
+
+pdf("10.6.0_Fibro_before_traj_plot.pdf", width = 6, height = 6)
+cluster.before.traj
+dev.off()
+
+#let it calculate trajectory
+#Fibro_monocle <- learn_graph(Fibro_monocle, use_partition = F, verbose = T, learn_graph_control=list(ncenter=275))
+#if no loop trajectory makes sense do
+set.seed(123)
+Fibro_monocle <- learn_graph(Fibro_monocle, use_partition = F, verbose = T, close_loop = F, learn_graph_control=list(ncenter=100)) #learn_graph_control=list(ncenter=250) #changed ncenter to reduce branches
+
+#plot trajectory into UMAP
+p <- plot_cells(Fibro_monocle, label_groups_by_cluster = F,
+                label_branch_points = T, label_roots = T, label_leaves = F,  
+                group_label_size = 4) + scale_color_manual(values = cluster_colors)
+p$layers[[4]]$aes_params$size <- 6   # branchpoints
+p$layers[[6]]$aes_params$size <- 10    # roots
+p$layers[[3]]$aes_params$size <- 1.2  #traj edges
+p$layers[[7]]$aes_params$size <- 6  # root numbers
+pdf(file.path(result_dir, "10.6.0_Fibro_traj_plot_thicker.pdf"), width = 6, height = 6)
+p
+dev.off()
+
+#order the cells in pseudotime
+#Fibro_monocle <- order_cells(Fibro_monocle, reduction_method = "UMAP", root_cells = colnames(Fibro_monocle[, clusters(Fibro_monocle) == 5]))
+#if this Error appears "Error in Y[, root_pr_nodes, drop = FALSE] : subscript out of bounds", leave root_cells = NULL to manually select starting point
+Fibro_monocle <- order_cells(Fibro_monocle, reduction_method = "UMAP", root_cells = NULL)
+
+pdf(file.path(result_dir, "10.6.0_Fibro_traj_plot_UMAP_pseudotime.pdf"), width = 5, height = 4)
+plot_cells(Fibro_monocle, color_cells_by = "pseudotime", label_groups_by_cluster = T,
+           label_branch_points = T, label_roots = F, label_leaves = F)
+dev.off()
+
+#create graph depicting where clusters are in the pseudotime
+Fibro_monocle$monocle3_pseudotime <- pseudotime(Fibro_monocle)
+data.pseudo <- as.data.frame(colData(Fibro_monocle))
+
+pdf(file.path(result_dir, "10.6.0_Fibro_traj_pseudotime.pdf"), width = 8, height = 5)
+ggplot(data.pseudo, aes(monocle3_pseudotime, annotated, fill = annotated)) + geom_boxplot() +
+  scale_fill_manual(values = cluster_colors) + ylab("")
+dev.off()
+#or alternatively order by pseudotime
+pdf(file.path(result_dir, "10.6.0_Fibro_traj_pseudotime_order.pdf"), width = 8, height = 5)
+ggplot(data.pseudo, aes(monocle3_pseudotime, reorder(annotated, monocle3_pseudotime), fill = annotated)) +
+  geom_boxplot() + scale_fill_manual(values = cluster_colors) + xlab("pseudotime") + ylab("")
+dev.off()
+
+qsave(Fibro_monocle, file.path(result_dir, "10.6.0_Fibro_monocle.qs"))
+```
+
+### 10.6.1 Identify Trajectory-associated Genes
+
+Use graph_test to identify genes whose expression varies along the trajectory graph. Rank the results by the reported statistics and export the selected genes for follow-up plots.
+
+```{r step-039, eval=FALSE}
+deg <- graph_test(Fibro_monocle, neighbor_graph = "principal_graph", verbose = TRUE)
+deg |> arrange(q_value, desc(morans_I)) |> filter(status == "OK") |> head()
+
+#deg gene list can be looked at and saved
+#Moran's value -1 shows for equal distribution, value +1 means local accumulation
+write.xlsx(deg, file.path(result_dir, "10.6.1_Fibros_monocle_DEG.xlsx"))
+```
+
+### 10.6.2 Plot Selected Genes Along Pseudotime
+
+Inspect the expression of selected genes along the ordered cells. The curves help relate individual markers to the inferred trajectory.
+
+```{r step-040, eval=FALSE}
+my_genes <- c("CFH", "ANGPT1", "SVEP1", "FGF7", "PI16", "KCNMA1", "SLC4A4")
+gene_ids <- rownames(Fibro_monocle)[
+  match(
+    my_genes,
+    rowData(Fibro_monocle)$gene_short_name
+  )
+]
+
+# Check that every gene was found
+data.frame(
+  gene = my_genes,
+  gene_id = gene_ids
+)
+
+Fibro_monocle_subset <- Fibro_monocle[gene_ids, ]
+
+p <- plot_genes_in_pseudotime(
+  Fibro_monocle_subset,
+  color_cells_by = "monocle3_pseudotime",
+  panel_order = my_genes,
+  ncol = 1
+)
+
+p
+
+pdf(file.path(result_dir, "10.6.2_Fibro_genes_of_interest_traj_pseudocolor.pdf"), width = 5, height = 5.5)
+plot_genes_in_pseudotime(Fibro_monocle_subset, color_cells_by = "monocle3_pseudotime" )
+dev.off()
+
+pdf(file.path(result_dir, "10.6.2_Fibro_genes_of_ineterest_traj_annotated_Xenium.pdf"), width = 5, height = 5.5)
+plot_genes_in_pseudotime(Fibro_monocle_subset, color_cells_by = "annotated" ) + scale_color_manual(values = cluster_colors)
+dev.off()
+```
+
+### 10.6.3 Plot Top Trajectory-associated Genes
+
+Select the highest-ranked genes from the trajectory analysis and plot their expression along pseudotime for the relevant groups.
+
+```{r step-041, eval=FALSE}
+deg_sig <- deg %>% filter(q_value < 0.05, status == "OK")
+
+deg_sig$cluster <- Fibro_monocle$annotated[ match(deg_sig$gene_short_name,
+                                                  rownames(Fibro_monocle)) ]
+
+top10_per_cluster <- deg_sig %>%
+  group_by(cluster) %>%
+  slice_max(order_by = morans_I, n = 10)
+
+genes_to_plot <- unique(top10_per_cluster$gene_short_name)
+
+pdf(file.path(result_dir, "10.6.3_Fibro_top_genes_pseudotime.pdf"), width = 5, height = 20)
+
+plot_genes_in_pseudotime(
+  Fibro_monocle[genes_to_plot, ],
+  color_cells_by = "annotated",
+  min_expr = 0.1
+)  + scale_color_manual(values = cluster_colors)
+
+dev.off()
+```
+
+### 10.6.4 Model Condition-associated Expression
+
+Fit the specified Monocle expression models and extract condition coefficients. Rank and visualize the condition-associated genes using the reported effect estimates and adjusted significance values.
+
+```{r step-042, eval=FALSE}
+gene_fits <- fit_models(Fibro_monocle, model_formula_str = "~condition")
+gene_fits_tbl <- coefficient_table(gene_fits)
+write.xlsx(gene_fits_tbl, file.path(result_dir, "10.6.4_Fibros_pseudotime_condition.xlsx"))
+
+# Keep only the condition coefficients
+deg_cond <- gene_fits_tbl %>%
+  filter(term != "(Intercept)")
+
+# Significant genes
+sig_genes <- deg_cond %>%
+  filter(q_value < 0.05)
+
+# Rank for labeling: first q-value, then |estimate|
+top_genes <- sig_genes %>%
+  arrange(q_value, desc(abs(estimate))) %>%
+  slice_head(n = 50) %>%       
+  pull(gene_short_name)
+
+deg_volcano <- deg_cond %>%
+  mutate(
+    logFC = estimate,
+    negLogQ = -log10(q_value),
+    DE = case_when(
+      estimate > 0.5  & q_value < 0.05 ~ "Up",
+      estimate < -0.5 & q_value < 0.05 ~ "Down",
+      TRUE                              ~ "NO"
+    ),
+    logP = pmin(negLogQ, 50),      # cap values for nicer plot
+    label_it = ifelse(gene_short_name %in% top_genes, gene_short_name, NA)
+  )
+
+
+deg_volcano$label_italic <- ifelse(
+  is.na(deg_volcano$label_it),
+  NA,
+  paste0("italic('", deg_volcano$label_it, "')")
+)
+
+p <- ggplot(deg_volcano, aes(x = logFC, y = logP, color = DE)) +
+  geom_vline(xintercept = c(-0.5, 0.5), color = "gray40", linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), color = "gray40", linetype = "dashed") +
+  geom_point(size = 3, alpha = 0.8) +
+  
+  scale_color_manual(
+    values = c("Down" = "black", "NO" = "grey70", "Up" = "#3d70b5"),
+    labels = c("Down", "ns", "Up")
+  ) +
+  
+  ggrepel::geom_text_repel(
+    aes(label = label_italic),
+    parse = TRUE,
+    max.overlaps = 50,
+    size = 3
+  ) +
+  
+  theme_classic(base_size = 14) +
+  labs(
+    title = "Condition-dependent DEGs along trajectory",
+    x = "log Fold Change",
+    y = expression(-log[10]("adjusted p-value")),
+    color = "Regulation"
+  )
+
+ggsave(file.path(result_dir, "10.6.4_Fibro_pseudotime_VolcanoPlot_DE_MS_vs_ctrl.pdf"), p , width = 10, height = 7)
+
+#plot genes over pseudotime
+p <- plot_genes_in_pseudotime(
+  Fibro_monocle[top_genes, ],
+  color_cells_by = "condition"
+)
+
+ggsave(file.path(result_dir, "10.6.4_Fibro_pseudotime_along_traj_Plot_DE_MS_vs_ctrl.pdf"), p , width = 5, height = 25)
+```
+
+# 11.0 Spatial Distances to Dural Fibroblasts
+
+Import the ROI assignments and align them with cell metadata before calculating spatial distances. Keep sample and ROI identifiers explicit so distances are interpreted within the appropriate tissue context.
+
+```{r step-043, eval=FALSE}
+roi_files <- list.files(
+  roi_dir,
+  pattern = "_ROI[0-9]*_cells_stats\\.csv$",
+  full.names = TRUE
+)
+
+basename(roi_files)
+length(roi_files)
+
+
+get_sample_key_from_roi_file <- function(f) {
+  
+  file_base <- tools::file_path_sans_ext(basename(f))
+  
+  condition <- stringr::str_extract(file_base, "Ctrl|MS")
+  
+  sample_part <- file_base %>%
+    stringr::str_remove("^S[0-9]+_") %>%
+    stringr::str_remove("_Ctrl.*$") %>%
+    stringr::str_remove("_MS.*$") %>%
+    stringr::str_remove("^s")
+  
+  sample_part <- gsub("-", "_", sample_part)
+  
+  sample_key <- paste0(condition, "_", sample_part)
+  
+  return(sample_key)
+}
+
+
+
+roi_cell_table <- list()
+
+for (f in roi_files) {
+  
+  sample_key <- get_sample_key_from_roi_file(f)
+  
+  roi_name <- stringr::str_extract(
+    tools::file_path_sans_ext(basename(f)),
+    "ROI[0-9]*"
+  )
+  
+  roi_df <- read.csv2(f)
+  
+  if (!"Cell.ID" %in% colnames(roi_df)) {
+    roi_df <- read.csv(f)
+  }
+  
+  roi_cells_xenium <- as.character(roi_df$Cell.ID) %>%
+    trimws()
+  
+  seurat_cells <- colnames(sc_combined)
+  xenium_cells <- sub("_[0-9]+$", "", seurat_cells)
+  
+  roi_cells_seurat <- seurat_cells[
+    xenium_cells %in% roi_cells_xenium &
+      sc_combined$sample == sample_key
+  ]
+  
+  roi_cell_table[[paste(sample_key, roi_name, sep = "_")]] <-
+    tibble::tibble(
+      cell = roi_cells_seurat,
+      sample = sample_key,
+      roi = roi_name,
+      sample_roi = paste(sample_key, roi_name, sep = "_")
+    )
+}
+
+roi_cell_table <- dplyr::bind_rows(roi_cell_table)
+
+
+#add to metadata
+meta <- sc_combined@meta.data %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("cell")
+
+meta_new <- meta %>%
+  dplyr::left_join(
+    roi_cell_table %>%
+      dplyr::distinct(cell, roi, sample_roi),
+    by = "cell"
+  )
+
+rownames(meta_new) <- meta_new$cell
+meta_new$cell <- NULL
+
+sc_combined@meta.data <- meta_new
+
+qsave(sc_combined, file.path(result_dir, "11.0_sc_combined_w_roi_info.qs"))
+```
+
+## 11.1 Calculate Cell-type Distances
+
+Extract tissue coordinates, join the cell-type and ROI annotations, and calculate nearest distances with STDistance. Inspect the target populations and grouping variables used in the calculation.
+
+```{r step-044, eval=FALSE}
+coord_list <- lapply(Images(sc_combined), function(img) {
+  
+  coords_img <- GetTissueCoordinates(
+    sc_combined,
+    image = img
+  ) %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("coord_id") %>%
+    dplyr::mutate(fov = img)
+  
+  return(coords_img)
+})
+
+coords <- dplyr::bind_rows(coord_list)
+
+head(coords)
+colnames(coords)
+
+#add meta data
+meta <- sc_combined@meta.data %>%
+  as.data.frame()
+
+meta$cell <- rownames(meta)
+
+coords_annot <- coords %>%
+  dplyr::left_join(meta, by = "cell") %>%
+  dplyr::rename(
+    x_coord = x,
+    y_coord = y
+  )
+
+celltype <- "snRNA_major_group_mix"
+
+
+#keep relevant columns
+coords_annot <- coords_annot %>%
+  dplyr::select(
+    cell,
+    fov,
+    sample,
+    x_coord,
+    y_coord,
+    sample_roi,
+    condition,
+    celltype = snRNA_major_group_mix
+  ) %>%
+  dplyr::filter(
+    !is.na(x_coord),
+    !is.na(y_coord),
+    !is.na(celltype)
+  )
+
+coords_annot <- coords %>%
+  dplyr::left_join(meta, by = "cell") %>%
+  dplyr::rename(
+    x_coord = x,
+    y_coord = y
+  ) %>%
+  dplyr::select(
+    cell,
+    fov,
+    sample,
+    x_coord,
+    y_coord,
+    sample_roi,
+    condition,
+    celltype = snRNA_major_group_mix
+  ) %>%
+  dplyr::filter(
+    !is.na(x_coord),
+    !is.na(y_coord),
+    !is.na(celltype)
+  ) %>%
+  dplyr::mutate(
+    celltype_merged = dplyr::case_when(
+      celltype %in% c("duraFibro", "arach_bordFibro") ~ "duraFibro",
+      TRUE ~ celltype
+    )
+  )
+
+unique(coords_annot$celltype_merged)
+
+#transfer to seurat object 
+coord_meta <- coords_annot %>%
+  dplyr::select(cell, fov, x_coord, y_coord) %>%
+  dplyr::distinct(cell, .keep_all = TRUE)
+
+meta_new <- sc_combined@meta.data %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("cell") %>%
+  dplyr::left_join(coord_meta, by = "cell")
+
+rownames(meta_new) <- meta_new$cell
+meta_new$cell <- NULL
+
+sc_combined@meta.data <- meta_new
+
+qsave(sc_combined, file.path(result_dir, "12.2_sc_combined_w_roi_and_coords.qs"))
+
+
+#calculate nearest distance between cell types
+target_types <- c("Myeloid", "Tc", "Bc", "Endo", "vascStroma")
+
+distance_results_list <- list()
+
+for (sr in unique(coords_annot$sample_roi)) {
+  
+  coords_sr <- coords_annot %>%
+    dplyr::filter(sample_roi == sr)
+  
+  present_types <- unique(coords_sr$celltype_merged)
+  
+  if (!"duraFibro" %in% present_types) next
+  
+  targets_sr <- intersect(target_types, present_types)
+  
+  if (length(targets_sr) == 0) next
+  
+  distance_sr <- calculate_nearest_distances(
+    coords_sr,
+    reference_type = "duraFibro",
+    target_types = targets_sr,
+    x_col = "x_coord",
+    y_col = "y_coord",
+    id_col = "cell",
+    type_col = "celltype_merged"
+  )
+  
+  distance_sr$sample_roi <- sr
+  
+  distance_results_list[[sr]] <- distance_sr
+}
+
+distance_results_roi <- dplyr::bind_rows(distance_results_list)
+```
+
+### 11.1.1 Visualize Distance Gradients
+
+Join the distance results to the spatial metadata and display them as tissue-level gradients. These plots show where cells lie relative to the selected target population.
+
+```{r step-045, eval=FALSE}
+target_types_all <- c(
+  "Myeloid",
+  "Tc",
+  "Bc",
+  "vascStroma",
+  "Endo"
+)
+
+sample_rois <- unique(coords_stdist$Sample)
+
+for (target in target_types_all) {
+  
+  # merge corresponding distance column
+  coords_dist <- coords_stdist %>%
+    dplyr::left_join(
+      distance_results_roi %>%
+        dplyr::select(cell, !!target),
+      by = c("Newbarcode" = "cell")
+    )
+  
+  plot_list <- list()
+  
+  for (sr in sample_rois) {
+    
+    coords_sr <- coords_dist %>%
+      dplyr::filter(Sample == sr)
+    
+    present_types <- unique(coords_sr$celltype_merged)
+    
+    if (!"duraFibro" %in% present_types) next
+    if (!target %in% present_types) next
+    
+    p <- visualize_spatial_gradient(
+      spatial_data = coords_dist,
+      sample = sr,
+      gradient_type = "duraFibro",
+      fixed_type = target,
+      expression_col = target,
+      type_col = "celltype_merged",
+      fixed_color = "grey80",
+      gradient_palette = "viridis",
+      point_size = 0.4,
+      point_alpha = 0.8
+    )
+    
+    # remove geom_segment / line layers
+    p$layers <- p$layers[
+      !sapply(p$layers, function(x) inherits(x$geom, "GeomSegment"))
+    ]
+    
+    p <- p +
+      ggtitle(sr) +
+      theme_classic() +
+      theme(
+        plot.title = element_text(size = 8, face = "bold"),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA)
+      ) +
+      scale_color_viridis_c(
+        name = paste0("Distance to nearest ", target, " (µm)"),
+        direction = -1
+      )
+    
+    plot_list[[sr]] <- p
+  }
+  
+  if (length(plot_list) == 0) next
+  
+  combined_plot <- patchwork::wrap_plots(
+    plot_list,
+    ncol = 4
+  )
+  
+  ggsave(
+    file.path(
+      result_dir,
+      paste0(
+        "11.1.1_Spatial_gradient_duraFibro_distance_to_",
+        target,
+        "_all_sample_roi.pdf"
+      )
+    ),
+    combined_plot,
+    width = 16,
+    height = 20,
+    limitsize = FALSE
+  )
+}
+```
+
+### 11.1.2 Inspect Selected Samples
+
+Restrict the distance-gradient visualization to the specified samples and retain their cell and ROI annotations.
+
+```{r step-046, eval=FALSE}
+target_types_all <- c(
+  "Myeloid",
+  "Tc",
+  "Bc",
+  "vascStroma",
+  "Endo"
+)
+
+selected_samples <- c(
+  "Ctrl_2022_143_ROI1",
+  "MS_2525_13_ROI1"
+)
+
+sample_rois <- intersect(
+  selected_samples,
+  unique(coords_stdist$Sample)
+)
+
+missing_samples <- setdiff(
+  selected_samples,
+  unique(coords_stdist$Sample)
+)
+
+if (length(missing_samples) > 0) {
+  warning(
+    "Samples not found: ",
+    paste(missing_samples, collapse = ", ")
+  )
+}
+
+for (target in target_types_all) {
+  
+  coords_dist <- coords_stdist %>%
+    dplyr::left_join(
+      distance_results_roi %>%
+        dplyr::select(
+          cell,
+          dplyr::all_of(target)
+        ),
+      by = c("Newbarcode" = "cell")
+    )
+  
+  plot_list <- list()
+  
+  for (sr in sample_rois) {
+    
+    coords_sr <- coords_dist %>%
+      dplyr::filter(
+        Sample == sr
+      )
+    
+    present_types <- unique(
+      coords_sr$celltype_merged
+    )
+    
+    if (!"duraFibro" %in% present_types) {
+      next
+    }
+    
+    if (!target %in% present_types) {
+      next
+    }
+    
+    p <- visualize_spatial_gradient(
+      spatial_data = coords_dist,
+      sample = sr,
+      gradient_type = "duraFibro",
+      fixed_type = target,
+      expression_col = target,
+      type_col = "celltype_merged",
+      fixed_color = "grey80",
+      gradient_palette = "viridis",
+      point_size = 0.4,
+      point_alpha = 0.8
+    )
+    
+    # Remove geom_segment / line layers
+    p$layers <- p$layers[
+      !sapply(
+        p$layers,
+        function(x) inherits(
+          x$geom,
+          "GeomSegment"
+        )
+      )
+    ]
+    
+    p <- p +
+      ggtitle(sr) +
+      theme_classic() +
+      theme(
+        plot.title = element_text(
+          size = 8,
+          face = "bold"
+        ),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        panel.border = element_rect(
+          colour = "black",
+          fill = NA
+        )
+      ) +
+      scale_color_viridis_c(
+        name = paste0(
+          "Distance to nearest ",
+          target,
+          " (µm)"
+        ),
+        direction = -1
+      )
+    
+    plot_list[[sr]] <- p
+  }
+  
+  if (length(plot_list) == 0) {
+    next
+  }
+  
+  combined_plot <- patchwork::wrap_plots(
+    plot_list,
+    ncol = 2
+  )
+  
+  ggsave(
+    file.path(
+      result_dir,
+      paste0(
+        "11.1.2_Spatial_gradient_duraFibro_distance_to_",
+        target,
+        "_selected_samples.pdf"
+      )
+    ),
+    plot = combined_plot,
+    width = 12,
+    height = 4,
+    limitsize = FALSE
+  )
+}
+```
+
+# 12.0 Cell–Cell Interactions
+
+Use the annotated cell populations to prioritize condition-associated ligand–receptor communication. The predictions are expression-based hypotheses for follow-up, not direct measurements of physical signaling.
+
+## 12.1 Prioritize Ligand–Receptor Interactions
+
+Prepare the SingleCellExperiment input, harmonize gene and cell-type names, load the NicheNet prior networks, and define the condition contrasts. Run the MultiNicheNet workflow and save the prioritization results for visualization.
+
+```{r step-047, eval=FALSE}
+sce <- Seurat::as.SingleCellExperiment(sc_combined, assay = "SCT")
+sce <- alias_to_symbol_SCE(sce, "human") |> makenames_SCE()
+
+sample_id <- "sample"
+group_id <- "condition"
+celltype_id <- "snRNA_major_group_mix" 
+covariates <- NA
+batches <- NA
+
+#define organism
+organism = "human"
+
+if(organism == "human"){
+  lr_network = readRDS(url("https://zenodo.org/record/7074291/files/lr_network_human_21122021.rds"))
+  lr_network = lr_network |> dplyr::rename(ligand = from, receptor = to) |> distinct(ligand, receptor) |> mutate(ligand = make.names(ligand), receptor = make.names(receptor))
+  ligand_target_matrix = readRDS(url("https://zenodo.org/record/7074291/files/ligand_target_matrix_nsga2r_final.rds"))
+  colnames(ligand_target_matrix) = colnames(ligand_target_matrix) |> make.names()
+  rownames(ligand_target_matrix) = rownames(ligand_target_matrix) |> make.names()
+} else if(organism == "mouse"){
+  lr_network = readRDS(url("https://zenodo.org/record/7074291/files/lr_network_mouse_21122021.rds"))
+  lr_network = lr_network |> dplyr::rename(ligand = from, receptor = to) |> distinct(ligand, receptor) |> mutate(ligand = make.names(ligand), receptor = make.names(receptor))
+  ligand_target_matrix = readRDS(url("https://zenodo.org/record/7074291/files/ligand_target_matrix_nsga2r_final_mouse.rds"))
+  colnames(ligand_target_matrix) = colnames(ligand_target_matrix) |> make.names()
+  rownames(ligand_target_matrix) = rownames(ligand_target_matrix) |> make.names()
+}
+
+#change names because _ and dots are not allowed
+colData(sce)[, celltype_id] <- factor(gsub("-", "_", colData(sce)[, celltype_id]))
+levels(colData(sce)[, celltype_id])
+
+#Sender and receiver cell types need to be defined. Here all cell types in the dataset are used
+senders_oi <- SummarizedExperiment::colData(sce)[,celltype_id] |> unique()
+receivers_oi <- SummarizedExperiment::colData(sce)[,celltype_id] |> unique()
+
+sce <- sce[, SummarizedExperiment::colData(sce)[,celltype_id] %in% c(senders_oi, receivers_oi)]
+
+min_cells <- 10
+
+abundance_info = get_abundance_info(
+  sce = sce, 
+  sample_id = sample_id, 
+  group_id = group_id, 
+  celltype_id = celltype_id, 
+  min_cells = min_cells, 
+  senders_oi = senders_oi, 
+  receivers_oi = receivers_oi, 
+  batches = batches)
+
+## check for condition-specific cell types
+abundance_df_summarized = abundance_info$abundance_data %>% mutate(keep = as.logical(keep)) %>% group_by(group_id, celltype_id) %>% summarise(samples_present = sum((keep)))
+celltypes_absent_one_condition = abundance_df_summarized %>% filter(samples_present == 0) %>% pull(celltype_id) %>% unique() # find truly condition-specific cell types by searching for cell types truely absent in at least one condition
+celltypes_present_one_condition = abundance_df_summarized %>% filter(samples_present >= 2) %>% pull(celltype_id) %>% unique() # require presence in at least 2 samples of one group so it is really present in at least one condition
+condition_specific_celltypes = intersect(celltypes_absent_one_condition, celltypes_present_one_condition)
+
+condition_specific_celltypes_senders = condition_specific_celltypes %>% intersect(senders_oi)
+condition_specific_celltypes_receivers = condition_specific_celltypes %>% intersect(receivers_oi)
+
+fraction_cutoff <- 0.05
+min_sample_prop <- 0.5
+frq_list = get_frac_exprs(sce = sce, sample_id = sample_id, celltype_id =  celltype_id, group_id = group_id, batches = batches, min_cells = min_cells, fraction_cutoff = fraction_cutoff, min_sample_prop = min_sample_prop)
+
+abundance_expression_info <- process_abundance_expression_info(
+  sce = sce, sample_id = sample_id, group_id = group_id, celltype_id = celltype_id, min_cells = min_cells,
+  senders_oi = union(senders_oi, condition_specific_celltypes_senders),
+  receivers_oi = union(receivers_oi, condition_specific_celltypes_receivers),
+  lr_network = lr_network, batches = batches, frq_list = frq_list, abundance_info = abundance_info)
+
+#If you compare against two groups, you should divide by 2, if you compare against three groups, you should divide by 3 etcetera
+contrasts_oi <- c("'M-(S+A)/2','S-(M+A)/2','A-(S+M)/2'")
+#if compare against two groups
+contrasts_oi <- c("'MS-Ctrl','Ctrl-MS'") 
+contrast_tbl <- tibble(contrast = c("MS-Ctrl","Ctrl-MS"), group = c("MS","Ctrl"))
+
+assay_oi_pb <- "counts"
+fun_oi_pb <- "sum"
+de_method_oi <- "edgeR" 
+findMarkers <- FALSE
+
+DE_info = get_DE_info(sce = sce, sample_id = sample_id, group_id = group_id, celltype_id = celltype_id, batches = batches, covariates = covariates, contrasts_oi = contrasts_oi, min_cells = min_cells, 
+                      assay_oi_pb = assay_oi_pb,
+                      fun_oi_pb = fun_oi_pb,
+                      de_method_oi = de_method_oi,
+                      findMarkers = findMarkers, 
+                      expressed_df = frq_list$expressed_df)
+
+#check p-value distribution#should be quite straight horizontal line
+DE_info$hist_pvals
+
+#if it looks ok, run "empirical_pval == FALSE 
+empirical_pval = FALSE
+#if it looks suboptimal run empirical_pval == TRUE and check quality
+empirical_pval = TRUE
+
+if(empirical_pval == TRUE){
+  DE_info_emp = get_empirical_pvals(DE_info$celltype_de$de_output_tidy)
+}
+DE_info_emp$hist_pvals_emp
+
+if(empirical_pval == FALSE){
+  celltype_de = DE_info$celltype_de$de_output_tidy
+} else {
+  celltype_de = DE_info_emp$de_output_tidy_emp %>% dplyr::select(-p_val, -p_adj) %>% dplyr::rename(p_val = p_emp, p_adj = p_adj_emp)
+}
+
+sender_receiver_de = combine_sender_receiver_de(
+  sender_de = celltype_de,
+  receiver_de = celltype_de,
+  senders_oi = senders_oi,
+  receivers_oi = receivers_oi,
+  lr_network = lr_network
+)
+
+logFC_threshold = 0.50
+p_val_threshold = 0.05
+fraction_cutoff = 0.05
+
+
+# p_val_adj = TRUE #In case of more samples per group + sufficient high number of DE genes per group-celltype (> 20-50), use p_val_adj = TRUE
+p_val_adj = T
+
+top_n_target = 400
+
+verbose = TRUE
+cores_system = 8
+n.cores = min(cores_system, sender_receiver_de$receiver %>% unique() %>% length()) # use one core per receiver cell type
+
+ligand_activities_targets_DEgenes = suppressMessages(suppressWarnings(get_ligand_activities_targets_DEgenes(
+  receiver_de = celltype_de,
+  receivers_oi = receivers_oi,
+  ligand_target_matrix = ligand_target_matrix,
+  logFC_threshold = logFC_threshold,
+  p_val_threshold = p_val_threshold,
+  p_val_adj = T,
+  top_n_target = top_n_target,
+  verbose = T, 
+  n.cores = n.cores
+)))
+
+prioritizing_weights_DE = c("de_ligand" = 1,
+                            "de_receptor" = 1)
+prioritizing_weights_activity = c("activity_scaled" = 2)
+
+prioritizing_weights_expression_specificity = c("exprs_ligand" = 2,
+                                                "exprs_receptor" = 2)
+
+prioritizing_weights_expression_sufficiency = c("frac_exprs_ligand_receptor" = 1)
+
+prioritizing_weights_relative_abundance = c( "abund_sender" = 0,
+                                             "abund_receiver" = 0)
+
+prioritizing_weights = c(prioritizing_weights_DE, 
+                         prioritizing_weights_activity, 
+                         prioritizing_weights_expression_specificity,
+                         prioritizing_weights_expression_sufficiency, 
+                         prioritizing_weights_relative_abundance)
+
+sender_receiver_tbl = sender_receiver_de |> dplyr::distinct(sender, receiver)
+
+metadata_combined = SummarizedExperiment::colData(sce) |> tibble::as_tibble()
+
+if(!is.na(batches)){
+  grouping_tbl = metadata_combined[,c(sample_id, group_id, batches)] |> tibble::as_tibble() |> dplyr::distinct()
+  colnames(grouping_tbl) = c("sample","group",batches)
+} else {
+  grouping_tbl = metadata_combined[,c(sample_id, group_id)] |> tibble::as_tibble() |> dplyr::distinct()
+  colnames(grouping_tbl) = c("sample","group")
+}
+
+scenario <- "regular" # all prioritization criteria will be weighted equally
+ligand_activity_down <- FALSE # use only upregulatory ligand activities to prioritize
+
+prioritization_tables = suppressMessages(generate_prioritization_tables(
+  sender_receiver_info = abundance_expression_info$sender_receiver_info,
+  sender_receiver_de = sender_receiver_de,
+  ligand_activities_targets_DEgenes = ligand_activities_targets_DEgenes,
+  contrast_tbl = contrast_tbl,
+  sender_receiver_tbl = sender_receiver_tbl,
+  grouping_tbl = grouping_tbl,
+  scenario = scenario, 
+  fraction_cutoff = fraction_cutoff, 
+  abundance_data_receiver = abundance_expression_info$abundance_data_receiver,
+  abundance_data_sender = abundance_expression_info$abundance_data_sender,
+  ligand_activity_down = ligand_activity_down 
+))
+
+lr_target_prior_cor = lr_target_prior_cor_inference(prioritization_tables$group_prioritization_tbl$receiver |> unique(), abundance_expression_info, celltype_de, grouping_tbl, prioritization_tables, ligand_target_matrix, logFC_threshold = logFC_threshold, p_val_threshold = p_val_threshold, p_val_adj = p_val_adj)
+
+#save previous calculations as one large list
+multinichenet_output = list(
+  celltype_info = abundance_expression_info$celltype_info,
+  celltype_de = celltype_de,
+  sender_receiver_info = abundance_expression_info$sender_receiver_info,
+  sender_receiver_de =  sender_receiver_de,
+  ligand_activities_targets_DEgenes = ligand_activities_targets_DEgenes,
+  prioritization_tables = prioritization_tables,
+  grouping_tbl = grouping_tbl,
+  lr_target_prior_cor = lr_target_prior_cor
+) 
+multinichenet_output = make_lite_output(multinichenet_output)
+
+saveRDS(multinichenet_output, file.path(result_dir, "12.1_multinichenet.rds"))
+
+##### Visualization Circos plot 
+#define colors based on our cluster_color 
+cluster_colors <- c( "ABC" = "#9584bd",
+                     "arach_bordFibro" = "#87be4d",
+                     "duraFibro" = "#f2cf22", 
+                     "vascStroma" = "#00b8df", 
+                     "Endo" = "#27a9b5", 
+                     "Myeloid" = "#e04c73",
+                     "Bc" = "#bf72ad",
+                     "Tc" = "#dd4e10", 
+                     "mix" = "grey",
+                     "unknown" = "grey")
+
+#create plot for the top100 predictions
+prioritized_tbl_oi_all = get_top_n_lr_pairs(multinichenet_output$prioritization_tables, 100, rank_per_group = FALSE)
+
+prioritized_tbl_oi = multinichenet_output$prioritization_tables$group_prioritization_tbl %>%
+  filter(id %in% prioritized_tbl_oi_all$id) %>%
+  distinct(id, sender, receiver, ligand, receptor, group) %>% left_join(prioritized_tbl_oi_all)
+prioritized_tbl_oi$prioritization_score[is.na(prioritized_tbl_oi$prioritization_score)] = 0
+
+senders_receivers = union(prioritized_tbl_oi$sender %>% unique(), prioritized_tbl_oi$receiver %>% unique()) %>% sort()
+
+colors_sender <- cluster_colors[senders_receivers]
+colors_receiver <- cluster_colors[senders_receivers]
+
+pdf(file.path(result_dir, "12.1_top100_circos_plot_snRNA_major_group_mix.pdf"), width = 10, height = 10)
+circos_list = make_circos_group_comparison(prioritized_tbl_oi, colors_sender, colors_receiver)
+dev.off()
+
+#split by receiver
+# Open multi-page PDF
+pdf(file.path(result_dir, "12.1_circos_split_by_receiver_SnRNA_major_group_mix.pdf"), width = 10, height = 10)
+
+unique_receivers <- sort(unique(prioritized_tbl_oi$receiver))
+
+for(receiver in unique_receivers) {
+  
+  # Subset top interactions for this receiver
+  subset_tbl <- prioritized_tbl_oi %>% filter(receiver == !!receiver)
+  if(nrow(subset_tbl) == 0) next
+  
+  # Create circos object
+  circos_list <- make_circos_group_comparison(subset_tbl, colors_sender, colors_receiver)
+  
+  circos.clear()
+  circos.par(gap.degree = 5)
+  
+  # Initialize sectors
+  cell_types <- circos_list$cell_types
+  xlim_list <- lapply(cell_types, function(x) c(0,1))
+  names(xlim_list) <- cell_types
+  for(sector in cell_types){
+    circos.initialize(factors = sector, xlim = xlim_list[[sector]])
+  }
+  
+  # Draw arcs and labels
+  cell_colors <- circos_list$colors
+  for(sector in cell_types){
+    circos.trackPlotRegion(factors = sector, y = c(0,1),
+                           bg.col = cell_colors[sector], bg.border = NA,
+                           panel.fun = function(x, y){
+                             circos.text(CELL_META$xcenter, CELL_META$ycenter,
+                                         CELL_META$sector.index,
+                                         facing = "clockwise", niceFacing = TRUE, cex = 0.8)
+                           })
+  }
+  
+  # Draw links
+  if(!is.null(circos_list$links) && nrow(circos_list$links) > 0){
+    for(i in seq_len(nrow(circos_list$links))){
+      link <- circos_list$links[i, ]
+      circos.link(sector.index1 = link$sender, point1 = 0.5,
+                  sector.index2 = link$receiver, point2 = 0.5,
+                  col = rgb(0,0,0,0.3), border = NA)
+    }
+  }
+  
+  # Each iteration creates a **new page** in the PDF
+}
+
+# Close PDF device
+dev.off()
+```
+
+# 13.0 Layer-specific Transcript Analysis
+
+Import the transcript summaries exported from Xenium Explorer and organize them by sample, ROI, and tissue layer. Normalize and summarize the measurements before comparing layer-specific patterns.
+
+## 13.1 Import Transcript Exports
+
+Read the Xenium Explorer transcript exports, extract sample and layer identifiers from their filenames, and combine the records with the ROI area information used for density summaries.
+
+```{r step-048, eval=FALSE}
+files <- list.files(
+  raw_data_transcripts_dir,
+  pattern = "transcript_stats\\.csv$",
+  full.names = TRUE
+)
+
+transcript_list <- list()
+area_list <- list()
+
+for(file in files){
+  
+  filename <- basename(file)
+  # Extract metadata from filename
+  filename2 <- str_remove(filename, "_transcript_stats\\.csv$")
+  
+  parts <- str_split(filename2, "_", simplify = TRUE)
+  
+  sample <- parts[1]
+  condition <- parts[2]
+  ROI <- parts[3]
+  
+  # everything after ROI belongs to the layer
+  layer <- paste(parts[4:ncol(parts)], collapse = "_")
+  
+  # get area of layer
+  header <- readLines(file, n = 3)
+  
+  area <- str_extract(
+    header[2],
+    "(?<=#Area \\(µm\\^2\\): ).*"
+  ) |>
+    as.numeric()
+  
+  # Read transcript table
+  df <- read_csv(
+    file,
+    skip = 3,
+    show_col_types = FALSE
+  )
+  
+  # rename density column (avoids encoding issues)
+  names(df)[names(df) != "Gene" & names(df) != "Count"] <- "Density"
+  
+  df <- df %>%
+    mutate(
+      sample = sample,
+      condition = condition,
+      ROI = ROI,
+      layer = layer
+    ) %>%
+    relocate(sample, condition, ROI, layer)
+  
+  transcript_list[[length(transcript_list)+1]] <- df
+  
+  area_list[[length(area_list)+1]] <-
+    tibble(
+      sample = sample,
+      condition = condition,
+      ROI = ROI,
+      layer = layer,
+      area_um2 = area
+    )
+  
+}
+
+transcript_df <- bind_rows(transcript_list)
+
+area_df <- bind_rows(area_list)
+
+write.csv2(transcript_df,
+           file.path(result_dir, "13.1_transcript_df.csv"),
+           row.names = FALSE)
+
+write.csv2(area_df,
+           file.path(result_dir, "13.1_area_df.csv"),
+           row.names = FALSE)
+
+
+rm(df, parts, transcript_list, area_list)
+
+#remove meningeal layer
+layer_order <- c(
+  "periosteal",
+  "meningeal2",
+  "meningeal1",
+  "arach_bord"
+)
+
+transcript_df <- transcript_df %>%
+  filter(layer %in% layer_order) %>%
+  mutate(
+    layer = factor(layer, levels = layer_order),
+    condition = factor(condition, levels = c("Ctrl", "MS"))
+  )
+
+area_df <- area_df %>%
+  filter(layer %in% layer_order) %>%
+  mutate(
+    layer = factor(layer, levels = layer_order),
+    condition = factor(condition, levels = c("Ctrl", "MS"))
+  )
+```
+
+## 13.2 Review ROI Areas
+
+Review the number and area of the selected ROIs before comparing transcript densities. Unequal ROI coverage should be considered when interpreting the layer summaries.
+
+```{r step-049, eval=FALSE}
+area_df_stats <- area_df %>%
+  mutate(
+    sample = factor(sample),
+    condition = factor(condition)
+  )
+
+# check number of ROIs
+area_df_stats %>%
+  count(sample, condition, ROI, layer) %>%
+  arrange(sample, ROI, layer)
+
+
+#mean area if I have multiple ROI
+area_df_stats <- area_df_stats %>%
+  group_by(sample, condition, layer) %>%
+  summarise(
+    area_um2 = mean(area_um2, na.rm = TRUE),
+    n_ROI = n_distinct(ROI),     # CHANGE: safer than n()
+    .groups = "drop"
+  ) %>%
+  mutate(
+    layer = factor(layer, levels = layer_order),
+    condition = factor(condition, levels = c("Ctrl", "MS")),
+    sample = factor(sample)
+  )
+```
+
+## 13.3 Transcript Density Across Layers
+
+Summarize transcript density within each sample and layer, then compare the layer profiles using the plots below.
+
+### 13.3.1 Average ROIs Within Each Sample
+
+Average the ROI measurements for each sample, layer, and gene before comparing samples. This avoids treating repeated ROIs from the same sample as independent biological replicates.
+
+```{r step-050, eval=FALSE}
+transcript_mean_df <- transcript_df %>% 
+  group_by( sample, condition, layer, Gene ) %>% 
+  summarise( Density = mean(Density, na.rm = TRUE), Count = mean(Count, na.rm = TRUE), n_ROI = n(), .groups = "drop" )
+
+write.csv2(
+  transcript_mean_df,
+  file.path(result_dir, "13.3.1_transcript_mean_per_sample_layer_gene.csv"),
+  row.names = FALSE
+)
+```
+
+### 13.3.2 Plot All Measured Genes
+
+Display the sample-level transcript densities across tissue layers for each gene, using the lines and points to retain the paired sample structure.
+
+```{r step-051, eval=FALSE}
+p <- ggplot(
+  transcript_mean_df,
+  aes(x = layer, y = Density, group = sample)
+) +
+  geom_boxplot(
+    aes(group = layer),
+    fill = "grey90",
+    outlier.shape = NA
+  ) +
+  geom_line(alpha = 0.4) +
+  geom_point(
+    aes(color = condition),
+    size = 2
+  ) +
+  facet_wrap(
+    ~ Gene,
+    scales = "free_y",
+    ncol = 5
+  ) +
+  theme_classic() +
+  labs(
+    x = NULL,
+    y = "Transcript density",
+    title = "Transcript density per layer"
+  )
+
+ggsave(
+  file.path(result_dir, "13.3.2_transcript_density_per_layer.pdf"),
+  p,
+  width = 30,
+  height = 100,
+  limitsize = FALSE
+)
+```
+
+### 13.3.3 Label Individual Sample Measurements
+
+Add sample labels to the transcript-density plots to identify the observations contributing to each layer distribution.
+
+```{r step-052, eval=FALSE}
+p<- ggplot(
+  transcript_mean_df,
+  aes(x = layer, y = Density)
+) +
+  geom_boxplot(
+    aes(group = layer),
+    outlier.shape = NA,
+    fill = "grey90"
+  ) +
+  geom_point(
+    aes(color = condition),
+    size = 2
+  ) +
+  geom_text_repel(
+    aes(label = sample),
+    size = 2.5,
+    max.overlaps = Inf
+  ) +
+  facet_wrap(
+    ~ Gene,
+    scales = "free_y"
+  ) +
+  theme_classic() +
+  labs(
+    x = NULL,
+    y = "Transcript density",
+    title = "Transcript density per layer with sample labels"
+  )
+
+ggsave(
+  file.path(result_dir, "13.3.3_transcript_density_label.pdf"),
+  p,
+  width = 50,
+  height = 50,
+  limitsize = FALSE
+)
+```
+
+## 13.4 Compare Selected Transcripts
+
+Select the transcripts of interest and prepare their sample and layer labels for the statistical comparisons and box plots below.
+
+```{r step-053, eval=FALSE}
+toi <- c("SP7", "CFH", "ANGPT1", "SVEP1", "FGF7", "PI16", "KCNMA1", "SLC4A4") #layer #"CHMP1B", "CCN2"
+toi <- c("CD19", "CD24", "DNTT", "IGHA1", "IGHA2", "IGHG1", "IGHM", "VPREB1") #Bc
+toi <- c("CD163", "CSF1R", "CTSB", "F13A1", "HCLS1", "IFI44L", "LYVE1", "MRC1", "MS4A7", "PLTP", "RGS1", "RNF149", "SLC11A1", "SPP1", "STAB1") #myeloid
+toi <- c("CD163", "CSF1R", "IFI44L", "LYVE1", "MRC1", "MS4A7", "SPP1", "STAB1") #subset myeloid
+toi <- c("COL16A1", "COL1A1") #collagen
+
+toi_df <- transcript_mean_df %>%
+  filter(Gene %in% toi)
+
+toi_df <- toi_df %>%
+  mutate(
+    Gene = factor(Gene, levels = toi)
+  )
+```
+
+### 13.4.1 Model and Plot Layer Differences
+
+Fit the specified mixed-effects models, obtain pairwise layer comparisons, and adjust the resulting P values. Plot the selected transcript densities with the corresponding comparison annotations.
+
+```{r step-054, eval=FALSE}
+stats_list <- list()
+pairwise_list <- list()
+
+for(gene in unique(toi_df$Gene)){
+  
+  df_gene <- toi_df %>%
+    filter(Gene == gene)
+  
+  fit <- lmer(
+    log10(Density + 1) ~ layer + (1 | sample),
+    data = df_gene
+  )
+  
+  # overall layer effect
+  anova_res <- as.data.frame(anova(fit))
+  anova_res$Gene <- gene
+  
+  stats_list[[gene]] <- anova_res
+  
+  # pairwise layer comparisons
+  pairwise_res <- as.data.frame(
+    pairs(
+      emmeans(fit, ~ layer),
+      adjust = "BH"
+    )
+  )
+  
+  pairwise_res$Gene <- gene
+  
+  pairwise_list[[gene]] <- pairwise_res
+  
+}
+
+layer_stats <- bind_rows(stats_list)
+layer_pairwise <- bind_rows(pairwise_list)
+
+#adjusted o-value
+layer_pairwise <- layer_pairwise %>%
+  group_by(Gene) %>%
+  mutate(
+    Gene = factor(Gene, levels = toi),
+    p_adj = p.adjust(p.value, method = "BH")
+  ) %>%
+  ungroup()
+
+layer_pairwise
+
+write.csv2(
+  layer_pairwise,
+  file.path(result_dir,
+            "13.4.1_TOI_layer-specific_+CHMP1B+CCN2_layer_lmm+BH_pairwise_statistics.csv"), #change name
+  row.names = FALSE
+)
+
+#significant
+pairwise_sig <- layer_pairwise %>%
+  filter(p_adj < 0.05) %>%
+  tidyr::separate(
+    contrast,
+    into = c("group1", "group2"),
+    sep = " - "
+  ) %>%
+  mutate(
+    Gene = factor(Gene, levels = toi),
+    p_label = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01  ~ "**",
+      p_adj < 0.05  ~ "*",
+      TRUE          ~ "ns"
+    )
+  )
+
+#plot
+y_pos <- toi_df %>%
+  group_by(Gene) %>%
+  summarise(
+    ymax = max(Density, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+pairwise_sig <- pairwise_sig %>%
+  left_join(y_pos, by = "Gene") %>%
+  group_by(Gene) %>%
+  mutate(
+    y.position = ymax * (1.03 + 0.06 * (row_number() - 1))
+  ) %>%
+  ungroup()
+
+layer_median <- toi_df %>%
+  group_by(Gene, layer) %>%
+  summarise(
+    median_density = median(Density, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+p <- ggplot(
+  toi_df,
+  aes(layer, Density)
+) +
+  geom_boxplot(
+    fill = "grey90",
+    outlier.shape = NA,
+    width = 0.7
+  ) +
+  geom_point(
+    position = position_jitter(width = 0.15),
+    size = 1,
+    alpha = 0.8, 
+    color = "darkgrey"
+  ) +
+  stat_pvalue_manual(
+    pairwise_sig,
+    label = "p_label",
+    xmin = "group1",
+    xmax = "group2",
+    y.position = "y.position",
+    tip.length = 0.01,
+    size = 3
+  ) +
+  facet_wrap(
+    ~ Gene,
+    scales = "free_y",
+    ncol = 4
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      vjust = 1
+    ),
+    strip.background = element_blank(),      # removes grey box
+    strip.text = element_text(
+      face = "italic",
+      size = 12
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "Transcript density",
+    title = "Transcripts of interest"
+  ) + 
+  geom_line(
+    data = layer_median,
+    aes(
+      x = layer,
+      y = median_density,
+      group = 1
+    ),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) 
+
+p
+
+ggsave(
+  file.path(result_dir, "13.4.1_toi_layer-specific+CHMP1B+CCN2.pdf"), #change name
+  p,
+  width = 10,
+  height = 9,
+  limitsize = FALSE
+)
+
+#line plot 
+plot_df <- toi_df %>%
+  group_by(Gene, layer) %>%
+  summarise(
+    mean_density = mean(Density, na.rm = TRUE),
+    sem_density = sd(Density, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+y_pos2 <- plot_df %>%
+  group_by(Gene) %>%
+  summarise(
+    ymax_line = max(
+      mean_density + sem_density,
+      na.rm = TRUE
+    ),
+    ymin_line = min(
+      pmax(mean_density - sem_density, 0),
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    yrange = ymax_line - ymin_line
+  )
+
+pairwise_sig_line <- pairwise_sig %>%
+  select(
+    -any_of(c(
+      "ymax",
+      "ymax_line",
+      "ymin_line",
+      "yrange",
+      "y.position"
+    ))
+  ) %>%
+  left_join(y_pos2, by = "Gene") %>%
+  group_by(Gene) %>%
+  mutate(
+    y.position =
+      ymax_line +
+      0.08 * yrange * row_number()
+  ) %>%
+  ungroup()
+
+
+
+p <- ggplot(
+  plot_df,
+  aes(
+    x = layer,
+    y = mean_density,
+    group = 1
+  )
+) +
+  geom_line(
+    linewidth = 0.8
+  ) +
+  geom_point(
+    size = 2.5
+  ) +
+  geom_errorbar(
+    aes(
+      ymin = pmax(mean_density - sem_density, 0),
+      ymax = mean_density + sem_density
+    ),
+    width = 0.15
+  ) +
+  stat_pvalue_manual(
+    pairwise_sig_line,
+    label = "p_label",
+    xmin = "group1",
+    xmax = "group2",
+    y.position = "y.position",
+    tip.length = 0.01,
+    size = 3
+  ) +
+  facet_wrap(
+    ~Gene,
+    scales = "free_y",
+    ncol = 2
+  ) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0.03, 0.06))
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      vjust = 1
+    ),
+    strip.background = element_blank(),
+    strip.text = element_text(
+      face = "italic",
+      size = 12
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "Transcript density",
+    title = "Transcripts of interest"
+  )
+
+p
+
+ggsave(
+  file.path(result_dir, "13.4.1_toi_myeloid_line_plot.pdf"), #change name
+  p,
+  width = 5,
+  height = 8,
+  limitsize = FALSE
+)
+```
+
+# 14.0 Fibroblast Composition Across Layers
+
+Combine the Xenium Explorer layer selections with fibroblast cluster labels. Calculate composition within samples before summarizing across samples, so samples contribute equally to the layer-level summaries.
+
+## 14.1 Prepare Layer Composition Tables
+
+Read the cell selections, harmonize the layer and sample identifiers, and join them to the fibroblast cluster annotations. Calculate cluster proportions within each sample and layer before computing the across-sample summary.
+
+```{r step-055, eval=FALSE}
+files <- list.files(
+  raw_data_cluster_dir,
+  pattern = "cluster_stats\\.csv$",
+  full.names = TRUE
+)
+
+cluster_list <- list()
+
+for(file in files){
+  
+  filename <- basename(file)
+  
+  filename2 <- str_remove(
+    filename,
+    "_cluster_stats\\.csv$"
+  )
+  
+  parts <- str_split(
+    filename2,
+    "_",
+    simplify = TRUE
+  )
+  
+  sample <- parts[1]
+  condition <- parts[2]
+  ROI <- parts[3]
+  
+  # Everything after ROI belongs to the layer
+  layer <- paste(
+    parts[4:ncol(parts)],
+    collapse = "_"
+  )
+  
+  # Read cluster table
+  df <- read_csv(
+    file,
+    skip = 3,
+    show_col_types = FALSE
+  )
+  
+  # Check imported column names once if needed
+  # names(df)
+  
+  df <- df %>%
+    dplyr::rename(
+      cluster = Cluster,
+      cell_count = Count
+    ) %>%
+    mutate(
+      sample = sample,
+      condition = condition,
+      ROI = ROI,
+      layer = layer
+    ) %>%
+    relocate(
+      sample,
+      condition,
+      ROI,
+      layer,
+      cluster,
+      cell_count
+    )
+  
+  cluster_list[[length(cluster_list) + 1]] <- df
+}
+
+cluster_df <- bind_rows(cluster_list)
+
+rm(
+  df,
+  parts,
+  cluster_list,
+  filename,
+  filename2,
+  file
+)
+
+#Within a given layer, what percentage of assigned fibroblast cells belongs to each cluster?
+
+layer_order <- c(
+  "periosteal",
+  "meningeal2",
+  "meningeal1",
+  "arach_bord"
+)
+
+cluster_order <- c(
+  "1",
+  "2",
+  "3",
+  "0"
+)
+
+# Clean names before converting to factors
+cluster_df <- cluster_df %>%
+  mutate(
+    layer = str_trim(layer),
+    layer = str_to_lower(layer),
+    cluster = str_trim(as.character(cluster))
+  )
+
+# QC: show layers that will be removed
+excluded_layers <- cluster_df %>%
+  filter(!layer %in% layer_order) %>%
+  count(layer, sort = TRUE)
+
+excluded_layers
+
+# Keep only desired layers and set their order
+cluster_df <- cluster_df %>%
+  filter(layer %in% layer_order) %>%
+  mutate(
+    layer = factor(layer, levels = layer_order),
+    condition = factor(condition, levels = c("Ctrl", "MS")),
+    sample = factor(sample),
+    cluster = factor(
+      cluster,
+      levels = c(cluster_order, "Unassigned")
+    )
+  )
+
+
+# pool multiple ROIs per sample, layer and cluster
+# exclude Unassigned cells before calculating contributions
+cluster_pooled_df <- cluster_df %>%
+  filter(cluster != "Unassigned") %>%
+  group_by(
+    sample,
+    condition,
+    layer,
+    cluster
+  ) %>%
+  summarise(
+    cell_count = sum(cell_count, na.rm = TRUE),
+    n_ROI = n_distinct(ROI),
+    .groups = "drop"
+  )
+
+# calculate cluster contribution among assigned cells within each layer
+cluster_contribution_df <- cluster_pooled_df %>%
+  group_by(
+    sample,
+    condition,
+    layer
+  ) %>%
+  mutate(
+    total_assigned_cells = sum(cell_count, na.rm = TRUE),
+    
+    cluster_fraction = if_else(
+      total_assigned_cells > 0,
+      cell_count / total_assigned_cells,
+      NA_real_
+    ),
+    
+    cluster_percent = cluster_fraction * 100
+  ) %>%
+  ungroup()
+
+cluster_contribution_df
+
+write.csv2(
+  cluster_contribution_df,
+  file.path(
+    result_dir,
+    "14.1_cluster_contribution_assigned_cells_per_sample_layer.csv"
+  ),
+  row.names = FALSE
+)
+
+# mean cluster contribution per layer 
+#First average the percentages across biological samples, so each sample contributes equally:
+cluster_layer_mean <- cluster_contribution_df %>%
+  group_by(layer, cluster) %>%
+  summarise(
+    mean_percent = mean(cluster_percent, na.rm = TRUE),
+    median_percent = median(cluster_percent, na.rm = TRUE),
+    sd_percent = sd(cluster_percent, na.rm = TRUE),
+    n_samples = n_distinct(sample),
+    .groups = "drop"
+  )
+
+# Ensure intended order
+cluster_contribution_df <- cluster_contribution_df %>%
+  mutate(
+    layer = factor(layer, levels = layer_order),
+    cluster = factor(cluster, levels = cluster_order)
+  )
+
+cluster_layer_mean <- cluster_layer_mean %>%
+  mutate(
+    layer = factor(layer, levels = layer_order),
+    cluster = factor(cluster, levels = cluster_order)
+  )
+
+cluster_contribution_df %>%
+  group_by(sample, condition, layer) %>%
+  summarise(
+    total_percent = sum(cluster_percent, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(-total_percent)
+```
+
+## 14.2 Plot Layer Composition
+
+Display the mean contribution of the fibroblast clusters within each tissue layer as stacked bars, using consistent cluster colors.
+
+```{r step-056, eval=FALSE}
+cluster_color <- c( "0" = "#87be4d",
+                    "2" = "#66c69b", 
+                    "1" = "#ee756d",
+                    "3" = "#d49005")
+
+p <- ggplot(
+  cluster_layer_mean,
+  aes(
+    x = layer,
+    y = mean_percent,
+    fill = cluster
+  )
+) +
+  geom_col(
+    width = 0.75,
+    color = "white",
+    linewidth = 0.2
+  ) +
+  scale_y_continuous(
+    limits = c(0, 100),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    ),
+    legend.title = element_blank()
+  ) +
+  scale_fill_manual(
+    values = cluster_color
+  ) +
+  labs(
+    x = NULL,
+    y = "Cluster contribution among assigned cells (%)",
+    title = "Fibroblast cluster composition across dura layers"
+  )
+
+p
+
+ggsave(
+  file.path(
+    result_dir,
+    "14.2_stackedbar_plot_cluster_contribution_assigned_cells_per_layer.pdf"
+  ),
+  p,
+  width = 4,
+  height = 4
+)
+```
+
+## 14.3 Compare Cluster Contributions
+
+Show the layer-by-cluster composition summary as a heatmap with numerical labels to make the relative contributions easier to compare.
+
+```{r step-057, eval=FALSE}
+p <- ggplot(
+  cluster_layer_mean,
+  aes(
+    x = layer,
+    y = cluster,
+    fill = mean_percent
+  )
+) +
+  geom_tile(
+    color = "white",
+    linewidth = 0.7
+  ) +
+  geom_text(
+    aes(label = sprintf("%.1f", mean_percent)),
+    size = 3
+  ) +
+  scale_fill_viridis_c(
+    option = "D",
+    direction = 1
+  ) +
+  coord_fixed() +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      vjust = 1
+    ),
+    axis.ticks = element_blank(),
+    legend.title = element_text(size = 8)
+  ) +
+  labs(
+    x = NULL,
+    y = "Fibroblast cluster",
+    fill = "Mean\ncontribution (%)",
+    title = "Fibroblast cluster composition across dura layers"
+  )
+
+p
+
+ggsave(
+  file.path(
+    result_dir,
+    "14.3_cluster_contribution_heatmap.pdf"
+  ),
+  p,
+  width = 5,
+  height = 4
+)
+```
+
+## 14.4 Compare Sample-level Contributions
+
+Plot the cluster contributions across samples and layers, and fit the specified mixed-effects comparisons. Retain the sample-level measurements when interpreting variability and significance.
+
+```{r step-058, eval=FALSE}
+pairwise_list <- list()
+
+for(cluster_i in levels(droplevels(cluster_contribution_df$cluster))){
+  
+  df_cluster <- cluster_contribution_df %>%
+    filter(cluster == cluster_i)
+  
+  fit <- lmer(
+    log10(cluster_percent + 1) ~ layer + (1 | sample),
+    data = df_cluster
+  )
+  
+  pairwise_res <- as.data.frame(
+    pairs(
+      emmeans(fit, ~ layer),
+      adjust = "none"
+    )
+  ) %>%
+    mutate(
+      cluster = cluster_i
+    )
+  
+  pairwise_list[[cluster_i]] <- pairwise_res
+  
+}
+
+cluster_layer_pairwise <- bind_rows(pairwise_list) %>%
+  group_by(cluster) %>%
+  mutate(
+    p_adj = p.adjust(p.value, method = "BH")
+  ) %>%
+  ungroup() %>%
+  mutate(
+    cluster = factor(cluster, levels = cluster_order)
+  )
+
+cluster_layer_pairwise
+
+write.csv2(
+  cluster_layer_pairwise,
+  file.path(
+    result_dir,
+    "14.4_cluster_pairwise_layer_LMM_BH.csv"
+  ),
+  row.names = FALSE
+)
+
+cluster_median_df <- cluster_contribution_df %>%
+  group_by(cluster, layer) %>%
+  summarise(
+    median_percent = median(cluster_percent, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    cluster = factor(cluster, levels = cluster_order),
+    layer = factor(layer, levels = layer_order)
+  )
+
+pairwise_sig <- cluster_layer_pairwise %>%
+  filter(p_adj < 0.05) %>%
+  tidyr::separate(
+    contrast,
+    into = c("group1", "group2"),
+    sep = " - "
+  ) %>%
+  mutate(
+    cluster = factor(cluster, levels = cluster_order),
+    p_label = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01  ~ "**",
+      p_adj < 0.05  ~ "*"
+    )
+  )
+
+y_pos <- cluster_contribution_df %>%
+  group_by(cluster) %>%
+  summarise(
+    ymax = max(cluster_percent, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+pairwise_sig <- pairwise_sig %>%
+  left_join(y_pos, by = "cluster") %>%
+  group_by(cluster) %>%
+  mutate(
+    y.position = ymax * (1.05 + 0.08 * (row_number() - 1))
+  ) %>%
+  ungroup()
+
+p <- ggplot(
+  cluster_contribution_df,
+  aes(
+    x = layer,
+    y = cluster_percent
+  )
+) +
+  geom_boxplot(
+    fill = "grey90",
+    outlier.shape = NA,
+    width = 0.7
+  ) +
+  geom_point(
+    position = position_jitter(
+      width = 0.12,
+      height = 0
+    ),
+    size = 1.3,
+    alpha = 0.7,
+    color = "darkgrey"
+  ) +
+  geom_line(
+    data = cluster_median_df,
+    aes(
+      x = layer,
+      y = median_percent,
+      group = 1
+    ),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  geom_point(
+    data = cluster_median_df,
+    aes(
+      x = layer,
+      y = median_percent
+    ),
+    inherit.aes = FALSE,
+    size = 2,
+    color = "black"
+  ) +
+  facet_wrap(
+    ~ cluster,
+    scales = "free_y",
+    ncol = 4,
+    labeller = labeller(
+      cluster = function(x) paste("Cluster", x)
+    )
+  ) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0.05, 0.25))
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      vjust = 1
+    ),
+    strip.background = element_blank(),
+    strip.text = element_text(
+      face = "bold",
+      size = 11
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "Cluster contribution among assigned cells (%)",
+    title = "Fibroblast cluster contribution across dura layers"
+  )
+
+if(nrow(pairwise_sig) > 0){
+  
+  p <- p +
+    stat_pvalue_manual(
+      pairwise_sig,
+      label = "p_label",
+      xmin = "group1",
+      xmax = "group2",
+      y.position = "y.position",
+      tip.length = 0.01,
+      size = 3
+    )
+  
+}
+
+p
+
+ggsave(
+  file.path(
+    result_dir,
+    "14.4_cluster_contribution_boxplots.pdf"
+  ),
+  p,
+  width = 6,
+  height = 4
+)
+```
+
+### 14.4.1 Plot Mean Layer Profiles
+
+Summarize the sample-level cluster contributions by layer and display their mean profiles with uncertainty bars. The code below specifies how the summary and uncertainty are calculated.
+
+```{r step-059, eval=FALSE}
+cluster_plot_df <- cluster_contribution_df %>%
+  dplyr::group_by(
+    cluster,
+    layer
+  ) %>%
+  dplyr::summarise(
+    mean_percent = mean(
+      cluster_percent,
+      na.rm = TRUE
+    ),
+    sem_percent = sd(
+      cluster_percent,
+      na.rm = TRUE
+    ) / sqrt(sum(!is.na(cluster_percent))),
+    n_samples = dplyr::n_distinct(sample),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    cluster = factor(
+      cluster,
+      levels = cluster_order
+    ),
+    layer = factor(
+      layer,
+      levels = layer_order
+    )
+  )
+
+y_pos_line <- cluster_plot_df %>%
+  dplyr::group_by(cluster) %>%
+  dplyr::summarise(
+    ymax_line = max(
+      mean_percent + sem_percent,
+      na.rm = TRUE
+    ),
+    ymin_line = min(
+      pmax(mean_percent - sem_percent, 0),
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    yrange = ymax_line - ymin_line,
+    
+    yrange = dplyr::if_else(
+      !is.finite(yrange) | yrange == 0,
+      pmax(abs(ymax_line), 1e-10) * 0.1,
+      yrange
+    )
+  )
+
+
+pairwise_sig_line <- pairwise_sig %>%
+  dplyr::select(
+    -tidyselect::any_of(
+      c(
+        "ymax",
+        "ymax_line",
+        "ymin_line",
+        "yrange",
+        "y.position"
+      )
+    )
+  ) %>%
+  dplyr::left_join(
+    y_pos_line,
+    by = "cluster"
+  ) %>%
+  dplyr::group_by(cluster) %>%
+  dplyr::arrange(
+    p_adj,
+    .by_group = TRUE
+  ) %>%
+  dplyr::mutate(
+    y.position =
+      ymax_line +
+      0.10 * yrange * dplyr::row_number()
+  ) %>%
+  dplyr::ungroup()
+
+p_line <- ggplot2::ggplot(
+  cluster_plot_df,
+  ggplot2::aes(
+    x = layer,
+    y = mean_percent,
+    group = 1
+  )
+) +
+  ggplot2::geom_line(
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  ggplot2::geom_point(
+    size = 2.5,
+    color = "black"
+  ) +
+  ggplot2::geom_errorbar(
+    ggplot2::aes(
+      ymin = pmax(
+        mean_percent - sem_percent,
+        0
+      ),
+      ymax = mean_percent + sem_percent
+    ),
+    width = 0.15,
+    linewidth = 0.6
+  ) +
+  ggplot2::facet_wrap(
+    ~ cluster,
+    scales = "free_y",
+    ncol = 4,
+    labeller = ggplot2::labeller(
+      cluster = function(x) paste("Cluster", x)
+    )
+  ) +
+  ggplot2::scale_y_continuous(
+    expand = ggplot2::expansion(
+      mult = c(
+        0.03,
+        0.15
+      )
+    )
+  ) +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(
+      angle = 45,
+      hjust = 1,
+      vjust = 1
+    ),
+    strip.background = ggplot2::element_blank(),
+    strip.text = ggplot2::element_text(
+      face = "bold",
+      size = 11
+    )
+  ) +
+  ggplot2::labs(
+    x = NULL,
+    y = "Cluster contribution among assigned cells (%)",
+    title = "Fibroblast cluster contribution across dura layers"
+  )
+
+
+if(nrow(pairwise_sig_line) > 0){
+  
+  p_line <- p_line +
+    ggpubr::stat_pvalue_manual(
+      data = pairwise_sig_line,
+      label = "p_label",
+      xmin = "group1",
+      xmax = "group2",
+      y.position = "y.position",
+      tip.length = 0.01,
+      step.increase = 0,
+      inherit.aes = FALSE,
+      size = 3
+    )
+}
+
+p_line
+
+ggsave(
+  file.path(
+    result_dir,
+    "14.4_cluster_contribution_boxplots_line_plot.pdf"
+  ),
+  p_line,
+  width = 6,
+  height = 3.5
+)
+```
+
+### 14.4.2 Inspect Profiles on Cluster-specific Scales
+
+Repeat the layer-profile visualization using a separate vertical scale for each cluster. This emphasizes within-cluster trends; heights are not directly comparable between panels.
+
+```{r step-060, eval=FALSE}
+p_line <- ggplot2::ggplot(
+  cluster_plot_df,
+  ggplot2::aes(
+    x = layer,
+    y = mean_percent,
+    group = 1
+  )
+) +
+  ggplot2::geom_line(
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  ggplot2::geom_point(
+    size = 2.5,
+    color = "black"
+  ) +
+  ggplot2::geom_errorbar(
+    ggplot2::aes(
+      ymin = pmax(mean_percent - sem_percent, 0),
+      ymax = mean_percent + sem_percent
+    ),
+    width = 0.15,
+    linewidth = 0.6
+  ) +
+  ggplot2::facet_wrap(
+    ~ cluster,
+    scales = "free_y",
+    ncol = 4,
+    labeller = ggplot2::labeller(
+      cluster = function(x) paste("Cluster", x)
+    )
+  ) +
+  
+  # Individual y-axis scales for each cluster
+  ggh4x::facetted_pos_scales(
+    y = list(
+      cluster == "0" ~ ggplot2::scale_y_continuous(
+        limits = c(0, 100),
+        breaks = seq(0, 100, by = 20),
+        expand = ggplot2::expansion(mult = c(0.02, 0.05))
+      ),
+      
+      cluster == "1" ~ ggplot2::scale_y_continuous(
+        limits = c(0, 100),
+        breaks = seq(0, 100, by = 20),
+        expand = ggplot2::expansion(mult = c(0.02, 0.05))
+      ),
+      
+      cluster == "2" ~ ggplot2::scale_y_continuous(
+        limits = c(0, 15),
+        breaks = seq(0, 15, by = 5),
+        expand = ggplot2::expansion(mult = c(0.02, 0.05))
+      ),
+      
+      cluster == "3" ~ ggplot2::scale_y_continuous(
+        limits = c(0, 15),
+        breaks = seq(0, 15, by = 5),
+        expand = ggplot2::expansion(mult = c(0.02, 0.05))
+      )
+    )
+  ) +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(
+      angle = 45,
+      hjust = 1,
+      vjust = 1
+    ),
+    strip.background = ggplot2::element_blank(),
+    strip.text = ggplot2::element_text(
+      face = "bold",
+      size = 11
+    )
+  ) +
+  ggplot2::labs(
+    x = NULL,
+    y = "Cluster contribution among assigned cells (%)",
+    title = "Fibroblast cluster contribution across dura layers"
+  )
+
+if(nrow(pairwise_sig_line) > 0){
+  
+  p_line <- p_line +
+    ggpubr::stat_pvalue_manual(
+      data = pairwise_sig_line,
+      label = "p_label",
+      xmin = "group1",
+      xmax = "group2",
+      y.position = "y.position",
+      tip.length = 0.01,
+      step.increase = 0,
+      inherit.aes = FALSE,
+      size = 3
+    )
+}
+
+
+p_line
+
+
+ggsave(
+  file.path(
+    result_dir,
+    "14.4_cluster_contribution_boxplots_line_plot_sepcific_scale.pdf"
+  ),
+  p_line,
+  width = 6,
+  height = 3.5
+)
+```
+
+# 15.0 Dural Fibroblasts Within ROIs
+
+Inspect dural fibroblast clusters, selected genes, and fibrosis-associated scores in the spatial coordinates of each sample ROI.
+
+## 15.1 Map Dural Fibroblast Clusters
+
+Split the selected cells by sample or ROI and plot their cluster assignments in tissue coordinates. Retain the original cluster labels for comparison across the ROI views.
+
+```{r step-061, eval=FALSE}
+duraFibro_seurat$sample_roi <-
+  sc_combined$sample_roi[Cells(duraFibro_seurat)]
+
+qsave(duraFibro_seurat, file.path(result_dir, "15.0_duraFibro_sample_roi.qs"))
+
+split_objects <- SplitObject(duraFibro_seurat, split.by = "sample_roi")
+
+#seurat clusters
+cluster_color <- c( "0" = "#87be4d",
+                    "2" = "#66c69b", 
+                    "1" = "#ee756d",
+                    "3" = "#d49005")
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    group.by = "seurat_clusters",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5, 
+    cols = cluster_color
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "15.1_ImageDimPlot_duraFibro_wo_mix_seurat_clusters_0.075_sample_roi.pdf"),
+  combined_plot,
+  width = 12,
+  height = 8
+)
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  ImageDimPlot(
+    split_objects[[sample_name]],
+    split.by = "seurat_clusters",
+    border.size = NA,
+    dark.background = FALSE,
+    size = 0.5, 
+    cols = cluster_color
+  ) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "15.1_ImageDimPlot_duraFibro_wo_mix_splitbyseurat_clusters_0.075_sample_roi.pdf"),
+  combined_plot,
+  width = 12,
+  height = 12
+)
+
+#split.by 
+DefaultAssay(duraFibro_seurat) <- "SCT"
+Idents(duraFibro_seurat) <- "seurat_clusters"
+cluster_levels <- levels(Idents(duraFibro_seurat))
+cluster_colors_seurat <- Seurat:::DiscretePalette(length(cluster_levels))
+names(cluster_colors_seurat) <- cluster_levels
+
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  
+  obj <- split_objects[[sample_name]]
+  
+  celltypes <- sort(unique(obj$seurat_clusters))
+  
+  plots <- lapply(celltypes, function(ct) {
+    
+    obj$highlight <- ifelse(
+      obj$seurat_clusters == ct,
+      as.character(ct),
+      "Other"
+    )
+    
+    ImageDimPlot(
+      obj,
+      group.by = "highlight",
+      cols = c( "Other" = "grey85", 
+                cluster_color),
+      #cols = c(
+      #  "Other" = "grey85",
+      #  cluster_colors_seurat[as.character(ct)]
+      #), #if you want to copy color from UMAP
+      border.size = NA,
+      dark.background = FALSE,
+      size = 1
+    ) +
+      ggtitle(paste(sample_name, "-", ct))
+    
+  })
+  
+  wrap_plots(plots, ncol = 3)
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(
+    result_dir,
+    "15.1_ImageDimPlot_duraFibro_cluster_highlighted_0.075_sample_roi.pdf"
+  ),
+  combined_plot,
+  width = 45,
+  height = 30, 
+  limitsize = F
+)
+```
+
+## 15.2 Map Selected Genes
+
+Plot the selected genes in the ROI tissue coordinates to examine their spatial expression patterns alongside the fibroblast cluster maps.
+
+```{r step-062, eval=FALSE}
+genes <- c("ANGPT1", "CFH", "FGF7", "SVEP1", "PI16", "SLC4A4", "KCNMA1") #genes of interest 
+genes <- c("COL1A1", "CCN2", "EGR1", "ATF3", "NR4A1", "KLF9", "IGFBP5", "PI16") #fibrosis genes of interest
+
+pdf(
+  file.path(result_dir, "15.2_ImageFeaturePlot_duraFibro_fibrosis_genes_of_interest_sample_roi.pdf"),
+  width = 14,
+  height = 12
+)
+
+for (gene in genes) {
+  
+  gene_maps <- lapply(names(split_objects), function(sample_name) {
+    
+    obj <- split_objects[[sample_name]]
+    DefaultAssay(obj) <- "SCT"
+    
+    ImageFeaturePlot(
+      obj,
+      features = gene,
+      border.size = NA,
+      dark.background = FALSE,
+      size = 1.5,
+      cols = c("grey95", "red")
+    ) +
+      ggtitle(sample_name) +
+      theme_void() +
+      theme(
+        plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+        legend.position = "right",
+        plot.margin = margin(2, 2, 2, 2)
+      )
+  })
+  
+  gene_plot <- wrap_plots(gene_maps, ncol = 3) +
+    plot_annotation(
+      title = paste0("Fibroblast expression: ", gene),
+      theme = theme(
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+    )
+  
+  print(gene_plot)
+}
+
+dev.off()
+
+#only sample Ctrl_2022_143_ROI1
+sample_name <- "Ctrl_2022_143_ROI1"
+
+obj <- split_objects[[sample_name]]
+DefaultAssay(obj) <- "SCT"
+
+gene_maps <- lapply(genes, function(gene) {
+  
+  ImageFeaturePlot(
+    obj,
+    features = gene,
+    border.size = NA,
+    dark.background = FALSE,
+    size = 1.5,
+    cols = c("grey95", "red")
+  ) +
+    ggtitle(gene) +
+    theme_void() +
+    theme(
+      plot.title = element_text(
+        size = 11,
+        face = "bold",
+        hjust = 0.5
+      ),
+      legend.position = "right",
+      plot.margin = margin(2, 2, 2, 2)
+    )
+})
+
+gene_plot <- wrap_plots(
+  gene_maps,
+  ncol = 3
+) +
+  plot_annotation(
+    title = paste0(
+      "Fibroblast expression: ",
+      sample_name
+    ),
+    theme = theme(
+      plot.title = element_text(
+        size = 16,
+        face = "bold",
+        hjust = 0.5
+      )
+    )
+  )
+
+gene_plot
+
+ggsave(file.path(result_dir, "15.2_ImageFeaturePlot_duraFibro_fibrosis_genes_of_interest_Ctrl_2022_143_ROI1.pdf"), gene_plot, width = 7, height = 10)
+```
+
+## 15.3 Map the Custom-panel Fibrosis Score
+
+Calculate the specified fibrosis-associated module score and plot it spatially within each sample ROI. Its interpretation is limited to the genes represented in the custom panel.
+
+```{r step-063, eval=FALSE}
+DefaultAssay(duraFibro_seurat) <- "SCT"
+
+fibrosis <- c("COL1A1", "CCN2", "EGR1", "ATF3", "NR4A1", "KLF9", "IGFBP5")
+fibrosis_score <- AddModuleScore(duraFibro_seurat, features = fibrosis, name = "fibrosisScore", ctrl = 10, nbin = 5, assay = "Xenium")
+
+split_objects <- SplitObject(duraFibro_seurat, split.by = "sample_roi")
+
+
+cluster_maps <- lapply(names(split_objects), function(sample_name) {
+  DefaultAssay(split_objects[[sample_name]]) <- "SCT"
+  
+  ImageFeaturePlot(
+    split_objects[[sample_name]],
+    features = "fibrosisScore1", 
+    border.size = NA, dark.background = FALSE, size = 0.5) +
+    ggtitle(sample_name)
+  
+})
+
+combined_plot <- wrap_plots(cluster_maps) +
+  theme(
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(result_dir, "15.3_ImageFeaturePlot_costm_spatial_fibrosis_score.pdf"),
+  combined_plot,
+  width = 12,
+  height = 8
+)
+```
+
