@@ -3,52 +3,61 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Explore single-nucleus and spatial transcriptomic data from human dura in health and multiple sclerosis." />
     <title>Human Dura Atlas</title>
-    <link rel="stylesheet" href="style.css" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="http://pmet.online" />
-    <link rel="dns-prefetch" href="http://pmet.online" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css?v=atlas-preview-2" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
   </head>
   <body>
-    <div class="background-animation">
-      <div class="blob blob-1"></div>
-      <div class="blob blob-2"></div>
-      <div class="blob blob-3"></div>
-    </div>
+    <a class="skip-link" href="#main">Skip to content</a>
     <header>
-      <div class="container">
-        <div class="logo">
-          <a href="#">Human Dura Atlas</a>
-        </div>
-        <nav>
+      <div class="container header-inner">
+        <a class="logo" href="#datasets">Human Dura Atlas</a>
+        <nav aria-label="Main navigation">
           <ul>
-            <li><a href="#home" class="active">Home</a></li>
-            <li><a href="#datasets">Datasets</a></li>
+            <li><a href="#datasets">Atlas</a></li>
             <li><a href="#code">Code</a></li>
             <li><a href="#about">About</a></li>
-            <li><a href="#contact">Contact</a></li>
-            <li>
-              <a href="https://github.com/duocang/dura_shiny_landing_page" target="_blank"><i class="fab fa-github"></i></a>
-            </li>
+            <li><a href="https://github.com/duocang/dura_shiny_landing_page" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a></li>
           </ul>
         </nav>
       </div>
     </header>
-
-    <section id="hero">
+    <main id="main" tabindex="-1">
+      <section id="datasets" class="atlas-hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">A single-cell &amp; spatial reference</p>
+            <h1>Human Dura<br />Atlas</h1>
+            <p class="subtitle">Explore the cellular landscape of human dura in health and multiple sclerosis.</p>
+            <a href="https://osmzhlab.uni-muenster.de/shiny/human_dura_atlas/" target="_blank" rel="noopener noreferrer" class="btn">Open Interactive Atlas <span aria-hidden="true">↗</span></a>
+            <p class="platform-note">Single-nucleus RNA-seq · Xenium spatial transcriptomics</p>
+          </div>
+          <figure class="atlas-figure">
+            <img src="images/all%20cells%20snRNA-seq.jpg" width="876" height="922" alt="UMAP showing cell populations in the human dura, including fibroblasts, B cells, T cells, myeloid and endothelial cells" />
+            <figcaption><span>Cellular overview</span> Human dura · snRNA-seq</figcaption>
+          </figure>
+        </div>
+      </section>
+    <section id="code" class="section">
       <div class="container">
-        <h1>Human Dura Atlas</h1>
-        <p class="subtitle">Welcome to the Human Dura Atlas</p>
-        <a href="#datasets" class="btn">Explore Datasets</a>
+        <h2>Analysis workflows</h2>
+        <div class="content-wrapper">
+          <div class="text-content">
+            <p>Read the analysis code and methods for each dataset.</p>
+            <div class="workflow-links">
+              <a href="code/snRNA-seq.html" target="_blank" rel="noopener noreferrer" class="workflow-link"> <i class="fas fa-dna" aria-hidden="true"></i> snRNA-seq Analysis <span aria-hidden="true">↗</span></a>
+              <a href="code/spatial-seq_5k.html" target="_blank" rel="noopener noreferrer" class="workflow-link"> <i class="fas fa-microscope" aria-hidden="true"></i> Xenium 5K Analysis <span aria-hidden="true">↗</span></a>
+              <a href="code/Xenium_spatial-seq_custom.html" target="_blank" rel="noopener noreferrer" class="workflow-link"> <i class="fas fa-microscope" aria-hidden="true"></i> Xenium Custom Analysis <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="about" class="section">
       <div class="container">
-        <h2>Welcome to the Human Dura Atlas</h2>
+        <h2>About the study</h2>
         <div class="content-wrapper">
           <div class="text-content">
             <p>
@@ -56,8 +65,7 @@
               Börsch & Schafflick et al.
             </p>
             <p>
-              We present a large scale single cell transcriptional and spatial atlas of human dura in health and disease (multiple sclerosis). Interactive visualizations of the
-              single-nuclei dataset and the spatial transcriptomics data (Xenium) can be found below.
+              We present a large scale single cell transcriptional and spatial atlas of human dura in health and disease (multiple sclerosis). The interactive atlas brings together single-nucleus and spatial transcriptomic data (Xenium).
             </p>
             <p>The raw sequencing data are available in GEO.</p>
             <div class="links">
@@ -70,110 +78,7 @@
       </div>
     </section>
 
-    <section id="datasets" class="section bg-light">
-      <div class="container">
-        <h2>Datasets</h2>
-        <p class="section-desc">Interactive visualizations of the single nuclei sural nerve dataset and the spatial transcriptomics data.</p>
-
-        <!-- Overview Dataset -->
-        <div class="dataset-group featured-group">
-          <div class="card featured-card">
-            <div class="card-image">
-              <img src="images/all%20cells%20snRNA-seq.jpg" alt="All cells snRNA-seq" />
-            </div>
-            <div class="card-content">
-              <h3>All cells snRNA-seq</h3>
-              <p class="card-desc">Comprehensive atlas of all cell types identified in the dura.</p>
-              <a href="https://osmzhlab.uni-muenster.de/shiny/cerebro_dura/?dataset=All_cells_snRNAseq" target="_blank" class="btn-sm">Explore Dataset</a>
-            </div>
-          </div>
-        </div>
-
-        <!-- Cell Type Subsets -->
-        <div class="subsection">
-          <h3 class="subsection-title">Cell Type Specific Subsets</h3>
-          <div class="grid grid-3">
-            <!-- Dataset 2 -->
-            <div class="card">
-              <div class="card-image">
-                <img src="images/Fibroblasts%20snRNA-seq.jpg" alt="Fibroblasts snRNA-seq" />
-              </div>
-              <div class="card-content">
-                <h3>Fibroblasts snRNA-seq</h3>
-                <a href="https://osmzhlab.uni-muenster.de/shiny/cerebro_dura/?dataset=Fibro_snRNAseq" target="_blank" class="btn-sm">Explore</a>
-              </div>
-            </div>
-
-            <!-- Dataset 3 -->
-            <div class="card">
-              <div class="card-image">
-                <img src="images/B%20cells%20snRNA-seq.jpg" alt="B cells snRNA-seq" />
-              </div>
-              <div class="card-content">
-                <h3>B cells snRNA-seq</h3>
-                <a href="https://osmzhlab.uni-muenster.de/shiny/cerebro_dura/?dataset=Bc_snRNAseq" target="_blank" class="btn-sm">Explore</a>
-              </div>
-            </div>
-
-            <!-- Dataset 4 -->
-            <div class="card">
-              <div class="card-image">
-                <img src="images/Myeloid%20cells%20snRNA-seq.jpg" alt="Myeloid cells snRNA-seq" />
-              </div>
-              <div class="card-content">
-                <h3>Myeloid cells snRNA-seq</h3>
-                <a href="https://osmzhlab.uni-muenster.de/shiny/cerebro_dura/?dataset=Myeloid_snRNAseq" target="_blank" class="btn-sm">Explore</a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Spatial Transcriptomics -->
-        <div class="subsection">
-          <h3 class="subsection-title">Spatial Transcriptomics</h3>
-          <div class="grid grid-2">
-            <!-- Dataset 5 -->
-            <div class="card">
-              <div class="card-image">
-                <img src="images/MS%20Fibroblasts%20spatial-seq.jpg" alt="MS Fibroblasts spatial-seq" />
-              </div>
-              <div class="card-content">
-                <h3>MS Fibroblasts spatial-seq</h3>
-                <a href="https://osmzhlab.uni-muenster.de/shiny/cerebro_dura/?dataset=MS-Fibro_spatialseq" target="_blank" class="btn-sm">Explore</a>
-              </div>
-            </div>
-
-            <!-- Dataset 6 -->
-            <div class="card">
-              <div class="card-image">
-                <img src="images/Ctrl%20Fibroblasts%20spatial-seq.jpg" alt="Ctrl Fibroblasts spatial-seq" />
-              </div>
-              <div class="card-content">
-                <h3>Ctrl Fibroblasts spatial-seq</h3>
-                <a href="https://osmzhlab.uni-muenster.de/shiny/cerebro_dura/?dataset=Ctrl-Fibro_spatialseq" target="_blank" class="btn-sm">Explore</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="code" class="section">
-      <div class="container">
-        <h2>Code</h2>
-        <div class="content-wrapper">
-          <div class="text-content">
-            <p>The source code and detailed analysis workflows for this project are available on our dedicated code page.</p>
-            <div style="margin-top: 2rem; display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-              <a href="code/snRNA-seq.html" target="_blank" class="btn" style="width: 250px; max-width: 100%; padding: 16px 12px; gap: 8px; font-size: 1rem"> <i class="fas fa-dna" aria-hidden="true"></i> snRNA-seq Analysis </a>
-              <a href="code/spatial-seq_5k.html" target="_blank" class="btn" style="width: 250px; max-width: 100%; padding: 16px 12px; gap: 8px; font-size: 1rem"> <i class="fas fa-microscope" aria-hidden="true"></i> Xenium 5K Analysis </a>
-              <a href="code/Xenium_spatial-seq_custom.html" target="_blank" class="btn" style="width: 250px; max-width: 100%; padding: 16px 12px; gap: 8px; font-size: 1rem"> <i class="fas fa-microscope" aria-hidden="true"></i> Xenium Custom Analysis </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
+    </main>
     <footer id="contact">
       <div class="container">
         <p>If you have any questions, please contact us via <a href="https://www.medizin.uni-muenster.de/en/neurologie/forschung/mzh-lab.html">mzhlab.com</a>.</p>
@@ -181,40 +86,5 @@
       </div>
     </footer>
 
-    <script>
-      // Prefetch optimization for pmet.online links
-      document.addEventListener('DOMContentLoaded', () => {
-        const links = document.querySelectorAll('a[href*="pmet.online"]');
-        const prefetchCache = new Set();
-
-        const prefetchLink = (url) => {
-          if (prefetchCache.has(url)) return;
-
-          const link = document.createElement('link');
-          link.rel = 'prefetch';
-          link.href = url;
-          document.head.appendChild(link);
-
-          prefetchCache.add(url);
-          console.log('Prefetching:', url);
-        };
-
-        links.forEach((link) => {
-          // Prefetch on hover (high intent)
-          link.addEventListener('mouseenter', () => {
-            prefetchLink(link.href);
-          });
-
-          // Prefetch on touch start (mobile)
-          link.addEventListener(
-            'touchstart',
-            () => {
-              prefetchLink(link.href);
-            },
-            { passive: true }
-          );
-        });
-      });
-    </script>
   </body>
 </html>
